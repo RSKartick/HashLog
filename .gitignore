@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local application data and secrets
+backend/hashlog.db
+backend/.env
+
+# Test and tooling output
+.pytest_cache/
+.coverage
+htmlcov/
