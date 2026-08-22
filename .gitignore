@@ -1,14 +1,34 @@
-# Python
+# Python cache, virtual environments, and test output
 __pycache__/
 *.py[cod]
 .venv/
 venv/
-
-# Local application data and secrets
-backend/hashlog.db
-backend/.env
-
-# Test and tooling output
 .pytest_cache/
 .coverage
+coverage.xml
 htmlcov/
+.tox/
+.nox/
+
+# Local databases and environment files
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editors and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
