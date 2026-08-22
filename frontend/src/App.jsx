@@ -214,7 +214,7 @@ export default function App() {
       />
 
       <main className="space-y-4">
-        <ChainVisualization records={records} tamperedIds={tamperedIds} />
+        <ChainVisualization records={records} tamperedIds={tamperedIds} logSnapshots={logSnapshots} />
 
         <AddEntry
           onSubmit={handleRegister}

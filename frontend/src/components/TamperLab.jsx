@@ -10,6 +10,8 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
   const [timeline, setTimeline] = useState([]);
   const selectedRecord = records.find((record) => String(record.id) === selectedId);
 
+  const displayContent = (value) => typeof value === "string" ? value : JSON.stringify(value ?? "", null, 2);
+
   const addTimeline = (label, status = "warning") => setTimeline((items) => [
     ...items,
     { label, status, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
@@ -23,7 +25,16 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
       addTimeline("Record modified", "warning");
       const result = await simulateTamper(selectedRecord.id);
       setTamperedId(selectedRecord.id);
-      setAttackReport({ recordId: selectedRecord.record_id, block: selectedRecord.id, trustedHash: result.trusted_hash || trustedHash, actualHash: result.actual_hash || "unknown" });
+      const originalContent = displayContent(selectedRecord.raw_content);
+      const tamperedContent = "[TAMPERED DATABASE CONTENT]";
+      const originalLines = originalContent.split(/\r?\n/);
+      const tamperedLines = tamperedContent.split(/\r?\n/);
+      const changedLines = Array.from({ length: Math.max(originalLines.length, tamperedLines.length) }, (_, index) => ({
+        number: index + 1,
+        original: originalLines[index] ?? "",
+        current: tamperedLines[index] ?? "",
+      })).filter((line) => line.original !== line.current);
+      setAttackReport({ recordId: selectedRecord.record_id, block: selectedRecord.id, trustedHash: result.trusted_hash || trustedHash, actualHash: result.actual_hash || "unknown", originalContent, tamperedContent, changedLines });
       addTimeline("Hash mismatch detected", "warning");
       addTimeline(`Ledger link broken at block #${selectedRecord.id}`, "danger");
       const checkpoints = await listCheckpoints();
@@ -78,6 +89,9 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs"><div><span className="text-[#8a8480]">Record:</span> <span className="text-[#f0ece9]">{attackReport.recordId}</span></div><div><span className="text-[#8a8480]">Proof field:</span> <span className="text-red-300">content_hash</span></div></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-[10px]"><div className="bg-[#050505] border border-[#3a2020] p-3"><div className="text-[#8a8480]">EXPECTED TRUSTED HASH</div><div className="text-emerald-300 break-all mt-1">{attackReport.trustedHash}</div></div><div className="bg-[#050505] border border-[#3a2020] p-3"><div className="text-[#8a8480]">ACTUAL DATABASE HASH</div><div className="text-red-300 break-all mt-1">{attackReport.actualHash}</div></div></div>
           <div className="font-mono text-xs text-red-300 border-t border-red-900/60 pt-3">LEDGER LINK BROKEN AT BLOCK #{attackReport.block}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3"><div><div className="font-mono text-[10px] uppercase text-[#8a8480] mb-1">Trusted original log</div><pre className="max-h-56 overflow-auto whitespace-pre-wrap bg-[#050505] border border-[#3a2020] p-3 text-[10px] text-emerald-300">{attackReport.originalContent}</pre></div><div><div className="font-mono text-[10px] uppercase text-[#8a8480] mb-1">Tampered log</div><pre className="max-h-56 overflow-auto whitespace-pre-wrap bg-[#050505] border border-[#3a2020] p-3 text-[10px] text-red-300">{attackReport.tamperedContent}</pre></div></div>
+          <div className="font-mono text-[10px] text-[#8a8480]">Changed lines: <span className="text-red-300">{attackReport.changedLines.length}</span></div>
+          <div className="space-y-1 font-mono text-[10px]">{attackReport.changedLines.slice(0, 25).map((line) => <div key={line.number} className="bg-[#111111] p-1.5"><span className="text-[#c9793f] mr-2">Line {line.number}</span><span className="text-red-300">- {line.original || "(removed)"}</span><span className="mx-2 text-[#8a8480]">→</span><span className="text-emerald-300">+ {line.current || "(added)"}</span></div>)}</div>
           <div className="font-mono text-[10px] text-[#8a8480]">This demo changes the persisted raw snapshot and recalculates its content hash while leaving the chain entry stale, reproducing a real content-tamper scenario.</div>
         </div>}
 

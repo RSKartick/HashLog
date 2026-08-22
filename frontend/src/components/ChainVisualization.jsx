@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { FiLink, FiCheckCircle, FiAlertTriangle, FiCopy, FiCheck, FiChevronRight, FiMaximize2, FiX, FiLayers, FiGitCommit, FiGitBranch, FiClock } from "react-icons/fi";
 
-export default function ChainVisualization({ records, tamperedIds }) {
+export default function ChainVisualization({ records, tamperedIds, logSnapshots = {} }) {
   const [viewMode, setViewMode] = useState("global"); // "global" | "lineage"
   const [selectedRecordId, setSelectedRecordId] = useState(null);
   const [inspectBlock, setInspectBlock] = useState(null);
@@ -27,6 +27,17 @@ export default function ChainVisualization({ records, tamperedIds }) {
   const activeLineageRecords = useMemo(() => {
     return activeIdentityKey ? recordIdentities[activeIdentityKey] || [] : [];
   }, [recordIdentities, activeIdentityKey]);
+
+  const inspectSnapshot = inspectBlock && logSnapshots[`${inspectBlock.source_system}/${inspectBlock.record_type}/${inspectBlock.record_id}`];
+  const inspectOriginal = inspectSnapshot?.original;
+  const inspectCurrent = inspectSnapshot?.current;
+  const inspectChanges = inspectOriginal !== undefined && inspectCurrent !== undefined
+    ? Array.from({ length: Math.max(String(inspectOriginal).split(/\r?\n/).length, String(inspectCurrent).split(/\r?\n/).length) }, (_, index) => ({
+        number: index + 1,
+        original: String(inspectOriginal).split(/\r?\n/)[index] ?? "",
+        current: String(inspectCurrent).split(/\r?\n/)[index] ?? "",
+      })).filter((line) => line.original !== line.current)
+    : [];
 
   if (!records || records.length === 0) {
     return (
@@ -396,6 +407,20 @@ export default function ChainVisualization({ records, tamperedIds }) {
                   <span className="text-[#f0ece9] font-medium">{inspectBlock.timestamp}</span>
                 </div>
               </div>
+
+              {inspectCurrent !== undefined && (
+                <div className="space-y-2 border border-[#2e2e2e] bg-[#080808] rounded p-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#c9793f] uppercase text-[10px]">Raw log evidence</span>
+                    <span className={inspectChanges.length ? "text-red-300" : "text-emerald-300"}>{inspectChanges.length} changed lines</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div><div className="text-[9px] text-[#8a8480] mb-1">TRUSTED ORIGINAL</div><pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-[#050505] p-2 text-[10px] text-emerald-300">{inspectOriginal}</pre></div>
+                    <div><div className="text-[9px] text-[#8a8480] mb-1">CURRENT STORED LOG</div><pre className="max-h-40 overflow-auto whitespace-pre-wrap bg-[#050505] p-2 text-[10px] text-red-300">{inspectCurrent}</pre></div>
+                  </div>
+                  {inspectChanges.length > 0 && <div className="space-y-1 text-[10px]"><div className="text-[#8a8480] uppercase">Detected changes</div>{inspectChanges.slice(0, 25).map((line) => <div key={line.number} className="bg-[#111111] p-1.5"><span className="text-[#c9793f] mr-2">Line {line.number}</span><span className="text-red-300">- {line.original || "(removed)"}</span><span className="mx-2 text-[#8a8480]">→</span><span className="text-emerald-300">+ {line.current || "(added)"}</span></div>)}</div>}
+                </div>
+              )}
 
               <div className="space-y-2">
                 <div>
