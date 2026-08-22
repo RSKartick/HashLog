@@ -1,7 +1,8 @@
 # HashLog backend
 
-FastAPI service for an append-only, hash-linked audit trail. The public API
-will live under `/api`; interactive documentation will be available at `/docs`.
+HashLog is a hash-only integrity ledger for records imported from external
+systems. External content is accepted temporarily to calculate a hash; only
+the hash, source identity, metadata, and immutable version links are stored.
 
 ## Local setup
 
@@ -9,9 +10,36 @@ will live under `/api`; interactive documentation will be available at `/docs`.
 cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn main:app --reload --port 8000
 ```
 
-Use `backend/.env.example` as the reference for local configuration. The
-database is intentionally local-only and is not committed to Git.
+Open http://localhost:8000/docs for Swagger UI. Set `HASHLOG_API_KEY` for a
+deployed environment; clients then send the same value in `X-API-Key`.
+
+## API
+
+```text
+POST /api/records/register              Hash one external record
+POST /api/records/import                Hash a JSON batch
+GET  /api/records                       List hash proofs
+GET  /api/records/history               List versions for one record
+POST /api/records/verify                Verify current external content
+GET  /api/ledger/verify                 Verify global and version chains
+POST /api/checkpoints                   Create a ledger checkpoint
+GET  /api/checkpoints                   List checkpoints
+GET  /api/checkpoints/{id}/verify       Verify a checkpoint
+GET  /api/export                        Export hashes only
+GET  /api/health                        Check service status
+```
+
+The response from registration never includes the original content. It
+contains `content_hash`, `previous_version_hash`, and `entry_hash` instead.
+
+## Tests
+
+Run from the repository root:
+
+```powershell
+pytest -q backend/tests
+```

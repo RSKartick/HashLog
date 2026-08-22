@@ -1,1 +1,1 @@
-"""HashLog backend test suite."""
+"""HashLog backend tests."""
