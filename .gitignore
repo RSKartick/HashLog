@@ -12,3 +12,7 @@ backend/.env
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Frontend build artifacts
+frontend/dist/
+frontend/node_modules/

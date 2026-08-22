@@ -8,7 +8,7 @@ export default function StatusBar({ health, onRefresh }) {
         <span className="font-mono">
           {health ? (
             <>
-              API online &middot; {health.total_entries} total
+              API online &middot; {health.total_hash_records} hash records
             </>
           ) : (
             "API offline"

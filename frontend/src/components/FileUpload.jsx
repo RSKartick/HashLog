@@ -1,11 +1,13 @@
 import { useState, useRef } from "react";
-import { FiUploadCloud, FiFileText, FiX, FiCheck } from "react-icons/fi";
+import { FiUploadCloud, FiFileText, FiX, FiCheck, FiDatabase, FiTag } from "react-icons/fi";
 
 export default function FileUpload({ onUpload, loading }) {
   const [file, setFile] = useState(null);
   const [parsed, setParsed] = useState(null);
   const [error, setError] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [sourceSystem, setSourceSystem] = useState("");
+  const [recordType, setRecordType] = useState("");
   const inputRef = useRef(null);
 
   const accept = ".json,.csv,.txt,.log";
@@ -19,26 +21,33 @@ export default function FileUpload({ onUpload, loading }) {
     reader.onload = (e) => {
       try {
         const text = e.target.result;
-        let entries = [];
+        let records = [];
 
         if (f.name.endsWith(".json")) {
           const json = JSON.parse(text);
-          entries = Array.isArray(json) ? json : json.entries ?? [json];
+          const arr = Array.isArray(json) ? json : json.entries ?? json.records ?? [json];
+          records = arr.map((item, i) => ({
+            record_id: item.record_id || item.id || "imported-" + (i + 1),
+            content: item.content ?? item.data ?? item,
+            metadata: item.metadata ?? null,
+          }));
         } else {
-          // plain text / csv: each non-empty line becomes one entry
-          entries = text
+          records = text
             .split("\n")
             .map((l) => l.trim())
             .filter(Boolean)
-            .map((line, i) => ({ data: line, id: i + 1 }));
+            .map((line, i) => ({
+              record_id: "line-" + (i + 1),
+              content: line,
+            }));
         }
 
-        if (entries.length === 0) {
-          setError("File is empty or has no parseable entries.");
+        if (records.length === 0) {
+          setError("File is empty or has no parseable records.");
           return;
         }
 
-        setParsed(entries);
+        setParsed(records);
       } catch {
         setError("Could not parse file. Use JSON or plain text.");
       }
@@ -54,29 +63,36 @@ export default function FileUpload({ onUpload, loading }) {
   };
 
   const handleConfirm = () => {
-    if (!parsed) return;
-    onUpload(parsed);
+    if (!parsed || !sourceSystem.trim() || !recordType.trim()) return;
+    onUpload({
+      source_system: sourceSystem.trim(),
+      record_type: recordType.trim(),
+      records: parsed,
+    });
     setFile(null);
     setParsed(null);
+    setSourceSystem("");
+    setRecordType("");
   };
 
   const handleClear = () => {
     setFile(null);
     setParsed(null);
     setError(null);
+    setSourceSystem("");
+    setRecordType("");
     if (inputRef.current) inputRef.current.value = "";
   };
 
   return (
     <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400">
             <FiUploadCloud size={16} />
           </div>
           <span className="text-sm font-medium text-zinc-200">
-            Upload Log File
+            Batch Import
           </span>
         </div>
         <span className="text-xs text-zinc-600 font-mono">.json .csv .txt</span>
@@ -84,7 +100,6 @@ export default function FileUpload({ onUpload, loading }) {
 
       <div className="px-5 pb-5">
         {!file ? (
-          /* Drop zone */
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
@@ -101,11 +116,10 @@ export default function FileUpload({ onUpload, loading }) {
               Drop a file here or <span className="text-accent">browse</span>
             </p>
             <p className="text-xs text-zinc-600">
-              JSON array, CSV, or plain text — one entry per line
+              JSON array of records, CSV, or plain text
             </p>
           </div>
         ) : (
-          /* File preview */
           <div className="space-y-3">
             <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-zinc-950 border border-zinc-800">
               <div className="flex items-center gap-3 min-w-0">
@@ -131,21 +145,41 @@ export default function FileUpload({ onUpload, loading }) {
 
             {parsed && (
               <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="relative">
+                    <FiDatabase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={sourceSystem}
+                      onChange={(e) => setSourceSystem(e.target.value)}
+                      placeholder="Source system *"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
+                    />
+                  </div>
+                  <div className="relative">
+                    <FiTag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={recordType}
+                      onChange={(e) => setRecordType(e.target.value)}
+                      placeholder="Record type *"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
+                    />
+                  </div>
+                </div>
+
                 <p className="text-xs text-zinc-500 px-1">
                   Parsed <span className="text-zinc-300 font-medium">{parsed.length}</span>{" "}
-                  {parsed.length === 1 ? "entry" : "entries"} from file
+                  {parsed.length === 1 ? "record" : "records"} from file
                 </p>
 
-                {/* preview first 3 lines */}
                 <div className="space-y-1 max-h-28 overflow-y-auto">
-                  {parsed.slice(0, 3).map((entry, i) => (
+                  {parsed.slice(0, 3).map((rec, i) => (
                     <div
                       key={i}
                       className="text-xs font-mono text-zinc-500 bg-zinc-950 rounded px-3 py-1.5 truncate"
                     >
-                      {typeof entry.data === "string"
-                        ? entry.data
-                        : JSON.stringify(entry.data)}
+                      {typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content)}
                     </div>
                   ))}
                   {parsed.length > 3 && (
@@ -158,7 +192,7 @@ export default function FileUpload({ onUpload, loading }) {
                 <div className="flex gap-2">
                   <button
                     onClick={handleConfirm}
-                    disabled={loading}
+                    disabled={loading || !sourceSystem.trim() || !recordType.trim()}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-accent text-zinc-950 text-sm font-medium hover:bg-accent-dim disabled:opacity-40 transition-all"
                   >
                     {loading ? (
@@ -166,7 +200,7 @@ export default function FileUpload({ onUpload, loading }) {
                     ) : (
                       <FiCheck size={14} strokeWidth={2.5} />
                     )}
-                    Append {parsed.length} {parsed.length === 1 ? "entry" : "entries"}
+                    Import {parsed.length} records
                   </button>
                   <button
                     onClick={handleClear}
