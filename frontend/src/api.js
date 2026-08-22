@@ -54,6 +54,11 @@ export async function verifyLedger() {
   return data;
 }
 
+export async function getRecordContent(recordDbId) {
+  const { data } = await api.get(`/records/${recordDbId}/content`);
+  return data;
+}
+
 export async function simulateTamper(recordDbId) {
   const { data } = await api.post("/dev/tamper", { record_db_id: recordDbId });
   return data;

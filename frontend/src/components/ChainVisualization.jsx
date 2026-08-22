@@ -1,11 +1,28 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { FiLink, FiCheckCircle, FiAlertTriangle, FiCopy, FiCheck, FiChevronRight, FiMaximize2, FiX, FiLayers, FiGitCommit, FiGitBranch, FiClock } from "react-icons/fi";
+import { getRecordContent } from "../api.js";
 
 export default function ChainVisualization({ records, tamperedIds, logSnapshots = {} }) {
   const [viewMode, setViewMode] = useState("global"); // "global" | "lineage"
   const [selectedRecordId, setSelectedRecordId] = useState(null);
   const [inspectBlock, setInspectBlock] = useState(null);
+  const [inspectContent, setInspectContent] = useState(undefined);
+  const [inspectContentLoading, setInspectContentLoading] = useState(false);
   const [copiedHash, setCopiedHash] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!inspectBlock) {
+      setInspectContent(undefined);
+      return () => { active = false; };
+    }
+    setInspectContentLoading(true);
+    getRecordContent(inspectBlock.id)
+      .then((payload) => { if (active) setInspectContent(payload.raw_content); })
+      .catch(() => { if (active) setInspectContent(null); })
+      .finally(() => { if (active) setInspectContentLoading(false); });
+    return () => { active = false; };
+  }, [inspectBlock]);
 
   // Group records by identity for lineage view
   const recordIdentities = useMemo(() => {
@@ -32,8 +49,9 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
   // Prefer the in-memory original/current pair (it lets us show a diff after
   // the demo tamper), but still show the row's stored raw snapshot after a
   // page reload when no in-memory snapshot exists.
-  const inspectOriginal = inspectSnapshot?.original ?? inspectBlock?.raw_content;
-  const inspectCurrent = inspectSnapshot?.current ?? inspectBlock?.raw_content;
+  const backendContent = inspectContent !== undefined ? inspectContent : inspectBlock?.raw_content;
+  const inspectOriginal = inspectSnapshot?.original ?? backendContent;
+  const inspectCurrent = inspectSnapshot?.current ?? backendContent;
   const inspectChanges = inspectOriginal !== undefined && inspectCurrent !== undefined
     ? Array.from({ length: Math.max(String(inspectOriginal).split(/\r?\n/).length, String(inspectCurrent).split(/\r?\n/).length) }, (_, index) => ({
         number: index + 1,
@@ -425,7 +443,15 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                 </div>
               </div>
 
-              {inspectCurrent !== undefined && (
+              <div className="space-y-2 border border-[#2e2e2e] bg-[#080808] rounded p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#c9793f] uppercase text-[10px]">Log contents from backend</span>
+                  {inspectContentLoading && <span className="text-[#8a8480]">Loading…</span>}
+                </div>
+                <pre className="max-h-56 overflow-auto whitespace-pre-wrap bg-[#050505] p-2 text-[10px] text-[#f0ece9]">{backendContent == null ? "No raw log data was saved for this proof. Hash verification is still available, but the original text cannot be reconstructed from a hash." : typeof backendContent === "string" ? backendContent : JSON.stringify(backendContent, null, 2)}</pre>
+              </div>
+
+              {inspectCurrent !== undefined && inspectCurrent !== null && (
                 <div className="space-y-2 border border-[#2e2e2e] bg-[#080808] rounded p-3">
                   <div className="flex items-center justify-between">
                     <span className="text-[#c9793f] uppercase text-[10px]">Raw log evidence</span>

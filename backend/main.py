@@ -355,6 +355,23 @@ def record_history(
     return [_response_with_entry_hash(row) for row in rows]
 
 
+@app.get("/api/records/{record_db_id}/content")
+def record_content(record_db_id: int) -> dict[str, Any]:
+    """Fetch the saved raw log only when the forensic viewer requests it."""
+    with db_session() as connection:
+        row = connection.execute(
+            "SELECT id, raw_content FROM hash_records WHERE id = ?",
+            (record_db_id,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Record proof not found")
+    return {
+        "record_db_id": row["id"],
+        "raw_content": _parse_raw_content(row["raw_content"]),
+        "available": row["raw_content"] is not None,
+    }
+
+
 @app.post("/api/records/verify", response_model=RecordVerifyResponse)
 def verify_external_record(request: RecordVerifyRequest) -> RecordVerifyResponse:
     """Compare current external content with the latest registered hash."""
