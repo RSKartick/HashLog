@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getRecordContent } from "../api.js";
 import { FiDatabase, FiTag, FiHash, FiClock, FiLayers, FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiShield, FiGitBranch } from "react-icons/fi";
 
 function truncateHash(hash, chars = 10) {
@@ -11,6 +12,15 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
   const [expanded, setExpanded] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
+  const [backendContent, setBackendContent] = useState(undefined);
+
+  useEffect(() => {
+    let active = true;
+    getRecordContent(record.id)
+      .then((result) => { if (active) setBackendContent(result.raw_content); })
+      .catch(() => { if (active) setBackendContent(null); });
+    return () => { active = false; };
+  }, [record.id]);
 
   const copyText = (text, key) => {
     if (!text) return;
@@ -21,7 +31,7 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
 
   const originalLines = logSnapshot?.original?.split(/\r?\n/) || [];
   const currentLines = logSnapshot?.current?.split(/\r?\n/) || [];
-  const storedContent = logSnapshot?.current ?? record.raw_content;
+  const storedContent = backendContent !== undefined ? backendContent : (logSnapshot?.current ?? record.raw_content);
   const changedLines = Array.from({ length: Math.max(originalLines.length, currentLines.length) }, (_, index) => ({
     number: index + 1,
     original: originalLines[index] ?? "",
@@ -211,6 +221,24 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
             )}
           </div>
         )}
+
+        <div className="border border-[#2e2e2e] bg-[#050505] rounded-[4px] p-3">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[#c9793f] mb-2">Log Content</div>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[11px] text-[#f0ece9]">
+            {backendContent === undefined
+              ? "Loading saved log content..."
+              : storedContent == null
+              ? "No raw log content was saved for this record. Re-import the file to store its contents."
+              : typeof storedContent === "string"
+              ? storedContent
+              : JSON.stringify(storedContent, null, 2)}
+          </pre>
+          {changedLines.length > 0 && (
+            <div className="mt-3 border-t border-red-900/50 pt-2 font-mono text-[10px] text-red-300">
+              Tampering comparison: {changedLines.length} changed line{changedLines.length === 1 ? "" : "s"}. Use “View changed lines” above for the details.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

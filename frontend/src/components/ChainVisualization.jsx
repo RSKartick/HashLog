@@ -445,7 +445,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
 
               <div className="space-y-2 border border-[#2e2e2e] bg-[#080808] rounded p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[#c9793f] uppercase text-[10px]">Log contents from backend</span>
+                  <span className="text-[#c9793f] uppercase text-[10px] font-semibold">LOG CONTENT</span>
                   {inspectContentLoading && <span className="text-[#8a8480]">Loading…</span>}
                 </div>
                 <pre className="max-h-56 overflow-auto whitespace-pre-wrap bg-[#050505] p-2 text-[10px] text-[#f0ece9]">{backendContent == null ? "No raw log data was saved for this proof. Hash verification is still available, but the original text cannot be reconstructed from a hash." : typeof backendContent === "string" ? backendContent : JSON.stringify(backendContent, null, 2)}</pre>
