@@ -13,6 +13,13 @@ if os.getenv("VERCEL") == "1" and "HASHLOG_DATABASE_PATH" not in os.environ:
 else:
     DATABASE_PATH = BACKEND_DIR / _database_setting
 
+# Raw log snapshots live in a separate store from the cryptographic ledger.
+_raw_database_setting = os.getenv("HASHLOG_RAW_DATABASE_PATH", "hashlog_raw.db")
+if os.getenv("VERCEL") == "1" and "HASHLOG_RAW_DATABASE_PATH" not in os.environ:
+    RAW_DATABASE_PATH = Path("/tmp/hashlog_raw.db")
+else:
+    RAW_DATABASE_PATH = BACKEND_DIR / _raw_database_setting
+
 
 def cors_origins() -> list[str]:
     """Return explicitly configured browser origins for CORS."""

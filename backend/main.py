@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 try:
     from .config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled, turnstile_secret_key
-    from .database import db_session, init_db
+    from .database import db_session, raw_db_session, init_db
     from .hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from .models import (
         CheckpointResponse,
@@ -48,7 +48,7 @@ try:
     )
 except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend/.
     from config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled, turnstile_secret_key
-    from database import db_session, init_db
+    from database import db_session, raw_db_session, init_db
     from hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from models import (
         CheckpointResponse,
@@ -241,6 +241,13 @@ def _append_hash_record(
     item = dict(row)
     item["metadata"] = metadata
     item["raw_content"] = content
+    with raw_db_session() as raw_connection:
+        raw_connection.execute(
+            "INSERT OR REPLACE INTO raw_logs "
+            "(record_db_id, source_system, record_type, record_id, version_number, content_hash, raw_content) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (row["id"], source_system, record_type, record_id, version_number, content_hash, _raw_content_json(content)),
+        )
     return HashRecordResponse(**item)
 
 
@@ -358,17 +365,30 @@ def record_history(
 @app.get("/api/records/{record_db_id}/content")
 def record_content(record_db_id: int) -> dict[str, Any]:
     """Fetch the saved raw log only when the forensic viewer requests it."""
-    with db_session() as connection:
-        row = connection.execute(
-            "SELECT id, raw_content FROM hash_records WHERE id = ?",
+    with raw_db_session() as connection:
+        raw_row = connection.execute(
+            "SELECT record_db_id, raw_content FROM raw_logs WHERE record_db_id = ?",
             (record_db_id,),
         ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail="Record proof not found")
+    if raw_row is None:
+        # Compatibility fallback for proofs created before the separate raw
+        # log database was introduced.
+        with db_session() as connection:
+            legacy_row = connection.execute(
+                "SELECT id, raw_content FROM hash_records WHERE id = ?",
+                (record_db_id,),
+            ).fetchone()
+        if legacy_row is None:
+            raise HTTPException(status_code=404, detail="Record proof not found")
+        raw_content = _parse_raw_content(legacy_row["raw_content"])
+    else:
+        raw_content = _parse_raw_content(raw_row["raw_content"])
+    if raw_content is None:
+        return {"record_db_id": record_db_id, "raw_content": None, "available": False}
     return {
-        "record_db_id": row["id"],
-        "raw_content": _parse_raw_content(row["raw_content"]),
-        "available": row["raw_content"] is not None,
+        "record_db_id": record_db_id,
+        "raw_content": raw_content,
+        "available": True,
     }
 
 
@@ -489,6 +509,11 @@ def simulate_tamper(request: TamperTestRequest) -> TamperTestResponse:
             (tampered_content, tampered_hash, request.record_db_id),
         )
         connection.commit()
+    with raw_db_session() as raw_connection:
+        raw_connection.execute(
+            "UPDATE raw_logs SET raw_content = ? WHERE record_db_id = ?",
+            (tampered_content, request.record_db_id),
+        )
 
     return TamperTestResponse(
         record_db_id=request.record_db_id,
@@ -518,6 +543,11 @@ def revert_tamper(request: TamperTestRequest) -> TamperTestResponse:
             (backup[2], backup[0], backup[1], request.record_db_id),
         )
         connection.commit()
+    with raw_db_session() as raw_connection:
+        raw_connection.execute(
+            "UPDATE raw_logs SET raw_content = ? WHERE record_db_id = ?",
+            (backup[2], request.record_db_id),
+        )
     _tamper_backups.pop(request.record_db_id, None)
     return TamperTestResponse(
         record_db_id=request.record_db_id,

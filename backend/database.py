@@ -6,9 +6,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 try:
-    from .config import DATABASE_PATH
+    from .config import DATABASE_PATH, RAW_DATABASE_PATH
 except ImportError:  # pragma: no cover - supports running from backend/.
-    from config import DATABASE_PATH
+    from config import DATABASE_PATH, RAW_DATABASE_PATH
 
 
 CREATE_HASH_RECORDS_TABLE = """
@@ -39,12 +39,32 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 )
 """
 
+CREATE_RAW_LOGS_TABLE = """
+CREATE TABLE IF NOT EXISTS raw_logs (
+    record_db_id INTEGER PRIMARY KEY,
+    source_system TEXT NOT NULL,
+    record_type TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    version_number INTEGER NOT NULL,
+    content_hash TEXT NOT NULL,
+    raw_content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+)
+"""
+
 
 def get_db() -> sqlite3.Connection:
     """Open a database connection with dictionary-like rows."""
     connection = sqlite3.connect(DATABASE_PATH, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA busy_timeout = 10000")
+    return connection
+
+
+def get_raw_db() -> sqlite3.Connection:
+    connection = sqlite3.connect(RAW_DATABASE_PATH, timeout=10)
+    connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA busy_timeout = 10000")
     return connection
 
@@ -56,6 +76,7 @@ def init_db() -> None:
     intentionally still possible for the tamper-detection demonstration.
     """
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    RAW_DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = get_db()
     try:
         connection.execute("PRAGMA journal_mode = WAL")
@@ -79,12 +100,31 @@ def init_db() -> None:
         connection.commit()
     finally:
         connection.close()
+    raw_connection = get_raw_db()
+    try:
+        raw_connection.execute(CREATE_RAW_LOGS_TABLE)
+        raw_connection.commit()
+    finally:
+        raw_connection.close()
 
 
 @contextmanager
 def db_session() -> Iterator[sqlite3.Connection]:
     """Yield a connection and commit or roll back the current transaction."""
     connection = get_db()
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+@contextmanager
+def raw_db_session() -> Iterator[sqlite3.Connection]:
+    connection = get_raw_db()
     try:
         yield connection
         connection.commit()
