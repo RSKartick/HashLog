@@ -1,4 +1,4 @@
-import { FiShield, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
+import { FiShield } from "react-icons/fi";
 
 export default function VerifyButton({ onClick, loading, result }) {
   return (
@@ -16,7 +16,7 @@ export default function VerifyButton({ onClick, loading, result }) {
             className="text-zinc-500 group-hover:text-accent transition-colors"
           />
         )}
-        Verify Chain Integrity
+        Verify Full Ledger
       </button>
 
       {result !== null && (
@@ -28,17 +28,22 @@ export default function VerifyButton({ onClick, loading, result }) {
           }`}
         >
           {result.valid ? (
-            <FiCheckCircle size={16} className="shrink-0" />
+            <div className="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center shrink-0">
+              <div className="w-1.5 h-1.5 rounded-full bg-current" />
+            </div>
           ) : (
-            <FiAlertTriangle size={16} className="shrink-0" />
+            <div className="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center shrink-0 font-bold text-[10px]">
+              !
+            </div>
           )}
           <div>
             <p className="font-medium">{result.message}</p>
-            {!result.valid && result.tampered_at && (
-              <p className="text-xs opacity-70 mt-0.5">
-                Entry #{result.tampered_at}
-              </p>
-            )}
+            <p className="text-xs opacity-60 mt-0.5 font-mono">
+              {result.total_records} record{result.total_records !== 1 ? "s" : ""} in chain
+              {!result.valid && result.tampered_at && (
+                <> &middot; broken at #{result.tampered_at}</>
+              )}
+            </p>
           </div>
         </div>
       )}

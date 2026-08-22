@@ -1,9 +1,8 @@
 import { FiLock, FiArrowDown } from "react-icons/fi";
 
-export default function Hero({ entryCount }) {
+export default function Hero({ recordCount }) {
   return (
     <section className="relative flex flex-col items-center justify-center text-center px-6 pt-28 pb-20">
-      {/* subtle radial glow behind the title */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="w-[500px] h-[300px] bg-accent/[0.04] rounded-full blur-3xl" />
       </div>
@@ -17,14 +16,17 @@ export default function Hero({ entryCount }) {
       </h1>
 
       <p className="relative mt-5 max-w-lg text-base sm:text-lg text-zinc-400 leading-relaxed">
-        Tamper-evident audit trail. Every entry cryptographically chained to its
-        predecessor — modification is mathematically impossible to hide.
+        Tamper-evident integrity ledger. Hash every external record and chain
+        them into an immutable audit trail — proof of data fidelity, not the data
+        itself.
       </p>
 
       <div className="relative mt-4 flex items-center gap-3 text-xs text-zinc-500 font-mono">
-        <span>{entryCount} {entryCount === 1 ? "record" : "records"} in chain</span>
+        <span>{recordCount} {recordCount === 1 ? "record" : "records"} in ledger</span>
         <span className="w-1 h-1 rounded-full bg-zinc-700" />
-        <span>SHA-256 linked</span>
+        <span>SHA-256</span>
+        <span className="w-1 h-1 rounded-full bg-zinc-700" />
+        <span>content never stored</span>
       </div>
 
       <a

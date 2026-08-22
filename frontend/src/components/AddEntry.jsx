@@ -1,16 +1,33 @@
 import { useState } from "react";
-import { FiPlus, FiUser, FiFileText } from "react-icons/fi";
+import { FiPlus, FiDatabase, FiHash, FiFileText, FiTag } from "react-icons/fi";
 
 export default function AddEntry({ onSubmit, loading }) {
-  const [data, setData] = useState("");
-  const [userId, setUserId] = useState("");
+  const [sourceSystem, setSourceSystem] = useState("");
+  const [recordType, setRecordType] = useState("");
+  const [recordId, setRecordId] = useState("");
+  const [content, setContent] = useState("");
   const [expanded, setExpanded] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!data.trim() || loading) return;
-    onSubmit({ data: data.trim(), user_id: userId.trim() || undefined });
-    setData("");
+    if (!sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim() || loading) return;
+
+    let parsedContent;
+    try {
+      parsedContent = JSON.parse(content);
+    } catch {
+      parsedContent = content.trim();
+    }
+
+    onSubmit({
+      source_system: sourceSystem.trim(),
+      record_type: recordType.trim(),
+      record_id: recordId.trim(),
+      content: parsedContent,
+    });
+
+    setContent("");
+    setRecordId("");
   };
 
   return (
@@ -24,7 +41,7 @@ export default function AddEntry({ onSubmit, loading }) {
             <FiPlus size={16} strokeWidth={2.2} />
           </div>
           <span className="text-sm font-medium text-zinc-200">
-            New Entry
+            Register Record
           </span>
         </div>
         <span className="text-xs text-zinc-500 font-mono">
@@ -34,37 +51,56 @@ export default function AddEntry({ onSubmit, loading }) {
 
       {expanded && (
         <form onSubmit={handleSubmit} className="px-5 pb-5 space-y-3">
-          <div className="relative">
-            <FiFileText
-              size={14}
-              className="absolute left-3 top-3 text-zinc-500"
-            />
-            <textarea
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              placeholder="Log entry data..."
-              rows={3}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-9 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none focus:border-accent/50 transition-colors font-mono"
-            />
-          </div>
-
-          <div className="flex items-end gap-3">
-            <div className="relative flex-1">
-              <FiUser
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"
-              />
+          {/* Identity fields */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="relative">
+              <FiDatabase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
               <input
                 type="text"
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                placeholder="User ID (optional)"
+                value={sourceSystem}
+                onChange={(e) => setSourceSystem(e.target.value)}
+                placeholder="Source system"
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
               />
             </div>
+            <div className="relative">
+              <FiTag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={recordType}
+                onChange={(e) => setRecordType(e.target.value)}
+                placeholder="Record type"
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
+              />
+            </div>
+          </div>
+
+          <div className="relative">
+            <FiHash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={recordId}
+              onChange={(e) => setRecordId(e.target.value)}
+              placeholder="Record ID"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
+            />
+          </div>
+
+          <div className="relative">
+            <FiFileText size={14} className="absolute left-3 top-3 text-zinc-500" />
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Record content (plain text or JSON)"
+              rows={4}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none focus:border-accent/50 transition-colors font-mono"
+            />
+          </div>
+
+          <div className="flex justify-end">
             <button
               type="submit"
-              disabled={!data.trim() || loading}
+              disabled={!sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim() || loading}
               className="px-5 py-2 rounded-lg bg-accent text-zinc-950 text-sm font-medium hover:bg-accent-dim disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2"
             >
               {loading ? (
@@ -72,7 +108,7 @@ export default function AddEntry({ onSubmit, loading }) {
               ) : (
                 <FiPlus size={14} strokeWidth={2.5} />
               )}
-              Append
+              Hash & Register
             </button>
           </div>
         </form>
