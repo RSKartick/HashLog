@@ -152,6 +152,11 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                   {/* Block Node Card */}
                   <div
                     onClick={() => setInspectBlock(record)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") setInspectBlock(record);
+                    }}
+                    role="button"
+                    tabIndex={0}
                     className={`w-64 bg-[#0d0d0d] border rounded-[8px] p-4 cursor-pointer transition-all duration-200 group relative hover:scale-[1.02] ${
                       isTampered
                         ? "border-red-600/80 bg-red-950/20 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
@@ -224,8 +229,17 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     </div>
 
                     <div className="mt-2.5 flex items-center justify-between text-[9px] font-mono text-[#5a5654] group-hover:text-[#b8b2ae]">
-                      <span>Click to inspect certificate</span>
-                      <FiMaximize2 className="w-3 h-3" />
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setInspectBlock(record);
+                        }}
+                        className="flex items-center gap-1 text-[#c9793f] hover:text-[#f0ece9] uppercase"
+                      >
+                        <span>Inspect forensic certificate</span>
+                        <FiMaximize2 className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
 
