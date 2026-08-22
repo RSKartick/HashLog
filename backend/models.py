@@ -1,4 +1,4 @@
-"""Validated request and response schemas for the hash-only API."""
+"""Validated request and response schemas for the integrity ledger API."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RecordRegister(BaseModel):
-    """External record content is accepted transiently and never persisted."""
+    """External record content is accepted and persisted as a version snapshot."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -47,7 +47,7 @@ class ImportRequest(BaseModel):
 
 
 class HashRecordResponse(BaseModel):
-    """Hash-only record stored in the HashLog database."""
+    """Record proof and its persisted raw snapshot."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -62,6 +62,7 @@ class HashRecordResponse(BaseModel):
     entry_hash: str
     timestamp: int
     metadata: dict[str, Any] | None
+    raw_content: Any | None = None
     created_at: str | None = None
 
 
@@ -134,6 +135,8 @@ class TamperTestResponse(BaseModel):
     record_db_id: int
     changed_field: str
     message: str
+    trusted_hash: str | None = None
+    actual_hash: str | None = None
 
 
 class CheckpointResponse(BaseModel):
@@ -157,7 +160,7 @@ class CheckpointVerifyResponse(BaseModel):
 
 
 class AuditCertificateResponse(BaseModel):
-    """Signed, hash-only audit result suitable for external evidence."""
+    """Signed audit result suitable for external evidence."""
 
     certificate_type: str
     issued_at: int

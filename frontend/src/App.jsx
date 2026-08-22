@@ -56,6 +56,16 @@ export default function App() {
       const data = await listRecords();
       const list = Array.isArray(data) ? data : [];
       setRecords(list);
+      setLogSnapshots((current) => {
+        const next = { ...current };
+        [...list].sort((a, b) => a.version_number - b.version_number).forEach((record) => {
+          if (record.raw_content === undefined || record.raw_content === null) return;
+          const key = `${record.source_system}/${record.record_type}/${record.record_id}`;
+          const text = typeof record.raw_content === "string" ? record.raw_content : JSON.stringify(record.raw_content, null, 2);
+          next[key] = { original: next[key]?.original ?? text, current: text };
+        });
+        return next;
+      });
     } catch {
       setRecords([]);
       showToast("Failed to fetch ledger — check API connectivity");

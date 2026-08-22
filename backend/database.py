@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS hash_records (
     previous_ledger_hash TEXT NOT NULL,
     timestamp INTEGER NOT NULL,
     metadata TEXT,
+    raw_content TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(source_system, record_type, record_id, version_number)
 )
@@ -59,6 +60,9 @@ def init_db() -> None:
     try:
         connection.execute("PRAGMA journal_mode = WAL")
         connection.execute(CREATE_HASH_RECORDS_TABLE)
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(hash_records)")}
+        if "raw_content" not in columns:
+            connection.execute("ALTER TABLE hash_records ADD COLUMN raw_content TEXT")
         connection.execute(CREATE_CHECKPOINTS_TABLE)
         connection.execute(
             "CREATE INDEX IF NOT EXISTS idx_hash_records_identity "

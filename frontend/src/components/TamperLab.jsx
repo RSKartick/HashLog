@@ -23,7 +23,7 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
       addTimeline("Record modified", "warning");
       const result = await simulateTamper(selectedRecord.id);
       setTamperedId(selectedRecord.id);
-      setAttackReport({ recordId: selectedRecord.record_id, block: selectedRecord.id, trustedHash, actualHash: "0".repeat(64) });
+      setAttackReport({ recordId: selectedRecord.record_id, block: selectedRecord.id, trustedHash: result.trusted_hash || trustedHash, actualHash: result.actual_hash || "unknown" });
       addTimeline("Hash mismatch detected", "warning");
       addTimeline(`Ledger link broken at block #${selectedRecord.id}`, "danger");
       const checkpoints = await listCheckpoints();
@@ -78,7 +78,7 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs"><div><span className="text-[#8a8480]">Record:</span> <span className="text-[#f0ece9]">{attackReport.recordId}</span></div><div><span className="text-[#8a8480]">Proof field:</span> <span className="text-red-300">content_hash</span></div></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-[10px]"><div className="bg-[#050505] border border-[#3a2020] p-3"><div className="text-[#8a8480]">EXPECTED TRUSTED HASH</div><div className="text-emerald-300 break-all mt-1">{attackReport.trustedHash}</div></div><div className="bg-[#050505] border border-[#3a2020] p-3"><div className="text-[#8a8480]">ACTUAL DATABASE HASH</div><div className="text-red-300 break-all mt-1">{attackReport.actualHash}</div></div></div>
           <div className="font-mono text-xs text-red-300 border-t border-red-900/60 pt-3">LEDGER LINK BROKEN AT BLOCK #{attackReport.block}</div>
-          <div className="font-mono text-[10px] text-[#8a8480]">HashLog stores hashes only, so this demo reports proof corruption rather than exposing raw financial field values.</div>
+          <div className="font-mono text-[10px] text-[#8a8480]">This demo changes the persisted raw snapshot and recalculates its content hash while leaving the chain entry stale, reproducing a real content-tamper scenario.</div>
         </div>}
 
         {timeline.length > 0 && <div className="border border-[#2e2e2e] bg-[#080808] rounded-[5px] p-5"><div className="flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-[#c9793f] mb-4"><FiClock /> Trust timeline</div><div className="space-y-3 border-l border-[#3a2a20] ml-2 pl-5">{timeline.map((event, index) => <div key={`${event.time}-${index}`} className="relative flex items-center justify-between gap-3 font-mono text-[11px]"><span className="absolute -left-[26px] w-2.5 h-2.5 rounded-full border-2 border-[#080808] bg-[#c9793f]" /><span className={event.status === "success" ? "text-emerald-300" : event.status === "danger" ? "text-red-300" : "text-amber-300"}>{event.label}</span><span className="text-[#5a5654]">{event.time}</span></div>)}</div></div>}

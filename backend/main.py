@@ -71,7 +71,7 @@ except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend
 
 
 _rate_limit_hits: dict[str, list[float]] = {}
-_tamper_backups: dict[int, tuple[str, str]] = {}
+_tamper_backups: dict[int, tuple[str, str, str | None]] = {}
 
 
 def require_api_key(
@@ -101,8 +101,8 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="HashLog API",
     description=(
-        "Hash-only, append-only integrity ledger for records imported from "
-        "external systems."
+        "Append-only integrity ledger with raw snapshots and cryptographic proofs "
+        "for records imported from external systems."
     ),
     version="2.0.0",
     lifespan=lifespan,
@@ -133,6 +133,19 @@ def _parse_metadata(value: str | None) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def _raw_content_json(content: Any) -> str:
+    return json.dumps(content, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _parse_raw_content(value: str | None) -> Any:
+    if value is None:
+        return None
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return value
+
+
 def _sign_payload(payload: dict[str, Any]) -> str:
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hmac.new(signing_secret().encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -141,6 +154,7 @@ def _sign_payload(payload: dict[str, Any]) -> str:
 def _response_from_row(row: sqlite3.Row) -> HashRecordResponse:
     item = dict(row)
     item["metadata"] = _parse_metadata(item.get("metadata"))
+    item["raw_content"] = _parse_raw_content(item.get("raw_content"))
     return HashRecordResponse(**item)
 
 
@@ -180,7 +194,7 @@ def _append_hash_record(
     content: Any,
     metadata: dict[str, Any] | None,
 ) -> HashRecordResponse:
-    """Hash content in memory and append only its proof to SQLite."""
+    """Append a hash proof and a raw snapshot for version viewing."""
     latest = _latest_for_identity(connection, source_system, record_type, record_id)
     version_number = (latest["version_number"] + 1) if latest else 1
     previous_version_hash = latest["entry_hash"] if latest else None
@@ -202,8 +216,8 @@ def _append_hash_record(
         INSERT INTO hash_records
             (source_system, record_type, record_id, version_number,
              content_hash, entry_hash, previous_version_hash, previous_ledger_hash,
-             timestamp, metadata)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             timestamp, metadata, raw_content)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             source_system,
@@ -216,6 +230,7 @@ def _append_hash_record(
             previous_ledger_hash,
             timestamp,
             _metadata_json(metadata),
+            _raw_content_json(content),
         ),
     )
     row = connection.execute(
@@ -225,6 +240,7 @@ def _append_hash_record(
         raise RuntimeError("Hash record was not created")
     item = dict(row)
     item["metadata"] = metadata
+    item["raw_content"] = content
     return HashRecordResponse(**item)
 
 
@@ -248,6 +264,7 @@ def _response_with_entry_hash(row: sqlite3.Row) -> HashRecordResponse:
     item = dict(row)
     item["entry_hash"] = _entry_hash_for_row(row)
     item["metadata"] = _parse_metadata(item.get("metadata"))
+    item["raw_content"] = _parse_raw_content(item.get("raw_content"))
     return HashRecordResponse(**item)
 
 
@@ -384,6 +401,13 @@ def _verify_ledger_rows(rows: list[sqlite3.Row]) -> LedgerVerifyResponse:
                 total_records=len(rows),
                 message=f"Ledger tampering detected at record #{row['id']}",
             )
+        if row["raw_content"] is not None and compute_content_hash(_parse_raw_content(row["raw_content"])) != row["content_hash"]:
+            return LedgerVerifyResponse(
+                valid=False,
+                tampered_at=row["id"],
+                total_records=len(rows),
+                message=f"Raw log content tampering detected at record #{row['id']}",
+            )
         computed = _entry_hash_for_row(row)
         if row["entry_hash"] != computed:
             return LedgerVerifyResponse(
@@ -432,24 +456,29 @@ def simulate_tamper(request: TamperTestRequest) -> TamperTestResponse:
         if row is None:
             raise HTTPException(status_code=404, detail="Hash record not found")
         original = connection.execute(
-            "SELECT content_hash, entry_hash FROM hash_records WHERE id = ?",
+            "SELECT content_hash, entry_hash, raw_content FROM hash_records WHERE id = ?",
             (request.record_db_id,),
         ).fetchone()
         if request.record_db_id not in _tamper_backups:
             _tamper_backups[request.record_db_id] = (
                 original["content_hash"],
                 original["entry_hash"],
+                original["raw_content"],
             )
+        tampered_content = _raw_content_json("[TAMPERED DATABASE CONTENT]")
+        tampered_hash = compute_content_hash("[TAMPERED DATABASE CONTENT]")
         connection.execute(
-            "UPDATE hash_records SET content_hash = ? WHERE id = ?",
-            ("0" * 64, request.record_db_id),
+            "UPDATE hash_records SET raw_content = ?, content_hash = ? WHERE id = ?",
+            (tampered_content, tampered_hash, request.record_db_id),
         )
         connection.commit()
 
     return TamperTestResponse(
         record_db_id=request.record_db_id,
-        changed_field="content_hash",
-        message="Test tamper applied. Run the full ledger audit to detect it.",
+        changed_field="raw_content, content_hash",
+        message="Test tamper applied to the stored log content. Run the full ledger audit to detect it.",
+        trusted_hash=original["content_hash"],
+        actual_hash=tampered_hash,
     )
 
 
@@ -468,14 +497,14 @@ def revert_tamper(request: TamperTestRequest) -> TamperTestResponse:
         if row is None:
             raise HTTPException(status_code=404, detail="Hash record not found")
         connection.execute(
-            "UPDATE hash_records SET content_hash = ?, entry_hash = ? WHERE id = ?",
-            (backup[0], backup[1], request.record_db_id),
+            "UPDATE hash_records SET raw_content = ?, content_hash = ?, entry_hash = ? WHERE id = ?",
+            (backup[2], backup[0], backup[1], request.record_db_id),
         )
         connection.commit()
     _tamper_backups.pop(request.record_db_id, None)
     return TamperTestResponse(
         record_db_id=request.record_db_id,
-        changed_field="content_hash, entry_hash",
+        changed_field="raw_content, content_hash, entry_hash",
         message="Original proof restored. Run the full ledger audit to confirm.",
     )
 
@@ -549,7 +578,7 @@ def export_ledger() -> list[HashRecordResponse]:
 
 @app.get("/api/audit/certificate", response_model=AuditCertificateResponse)
 def audit_certificate() -> AuditCertificateResponse:
-    """Create a signed, hash-only audit certificate for external evidence."""
+    """Create a signed audit certificate containing hash proofs for external evidence."""
     with db_session() as connection:
         rows = connection.execute("SELECT * FROM hash_records ORDER BY id ASC").fetchall()
         checkpoints = connection.execute("SELECT id FROM checkpoints ORDER BY id ASC").fetchall()

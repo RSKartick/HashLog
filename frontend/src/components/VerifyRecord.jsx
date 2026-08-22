@@ -215,7 +215,7 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
               </span>
             </div>
             <span className="font-mono text-[9px] text-[#8a8480] bg-[#111111] px-2 py-0.5 rounded border border-[#242424]">
-              HASH-ONLY CHECK
+              SNAPSHOT + HASH CHECK
             </span>
           </div>
 

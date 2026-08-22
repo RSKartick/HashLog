@@ -1,6 +1,7 @@
 # HashLog backend
 
-HashLog is a hash-only integrity ledger for records imported from external
+HashLog is an append-only integrity ledger with raw version snapshots and
+cryptographic proofs for records imported from external
 systems. External content is accepted temporarily to calculate a hash; only
 the hash, source identity, metadata, and immutable version links are stored.
 

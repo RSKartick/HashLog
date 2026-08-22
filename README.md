@@ -1,10 +1,10 @@
 # HashLog
 
-> **Zero-Knowledge External Integrity Ledger & Cryptographic Audit Trail**
+> **Versioned External Integrity Ledger & Cryptographic Audit Trail**
 
-HashLog is a high-throughput, append-only cryptographic ledger designed to mathematically guarantee the integrity of external database records, documents, and business transactions without persisting raw sensitive data.
+HashLog is an append-only cryptographic ledger that stores versioned raw log snapshots alongside their hashes, allowing both tamper detection and visual change inspection.
 
-By combining zero-knowledge content hashing with dual-lineage SHA-256 hash chains, HMAC-signed audit certificates, and independent state checkpoints, HashLog instantly exposes any unauthorized database row modification, silent data drift, or rogue deletion with mathematical certainty.
+By combining canonical content hashing with dual-lineage SHA-256 hash chains, HMAC-signed audit certificates, and independent state checkpoints, HashLog exposes unauthorized database edits and shows what changed between stored log versions.
 
 ---
 
@@ -33,7 +33,7 @@ By combining zero-knowledge content hashing with dual-lineage SHA-256 hash chain
 
 Unlike conventional logging engines that duplicate mutable application data into another table, HashLog operates strictly on cryptographic proofs:
 
-1. **Zero-Knowledge Content Ingestion**: The application hashes external payloads in memory (`content_hash`) using canonical JSON serialization. The raw payload is immediately discarded; only the proof is written to the ledger.
+1. **Versioned Content Ingestion**: The application stores a raw snapshot for each version and calculates its canonical `content_hash`, allowing auditors to inspect the original and changed content.
 2. **Dual-Lineage Cryptographic Graph**:
    - **Global Ledger Spine (`previous_ledger_hash`)**: Every record is linked linearly to the preceding ledger entry across all systems, forming an append-only timeline starting from `GENESIS`.
    - **Per-Record Version Chain (`previous_version_hash`)**: Entries sharing the same composite identity (`source_system`, `record_type`, `record_id`) maintain an independent version lineage ($v1 \rightarrow v2 \rightarrow v3$).

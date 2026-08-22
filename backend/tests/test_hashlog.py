@@ -118,7 +118,8 @@ def test_tamper_lab_endpoint_corrupts_a_proof_only_when_enabled(client, monkeypa
     monkeypatch.setenv("HASHLOG_ENABLE_TAMPER_TEST", "true")
     applied = client.post("/api/dev/tamper", json={"record_db_id": record["id"]})
     assert applied.status_code == 200
-    assert applied.json()["changed_field"] == "content_hash"
+    assert applied.json()["changed_field"] == "raw_content, content_hash"
+    assert applied.json()["trusted_hash"] != applied.json()["actual_hash"]
 
     audit = client.get("/api/ledger/verify")
     assert audit.json()["valid"] is False
