@@ -9,6 +9,7 @@ import CheckpointButton from "./components/CheckpointButton.jsx";
 import EntryList from "./components/EntryList.jsx";
 import StatusBar from "./components/StatusBar.jsx";
 import TamperLab from "./components/TamperLab.jsx";
+import CaptchaGate from "./components/CaptchaGate.jsx";
 import {
   listRecords,
   registerRecord,
@@ -19,6 +20,11 @@ import {
 } from "./api.js";
 
 export default function App() {
+  const captchaSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+  const [captchaVerified, setCaptchaVerified] = useState(() => {
+    if (!captchaSiteKey) return true;
+    return window.localStorage.getItem("hashlog_captcha_verified") === "true";
+  });
   const [records, setRecords] = useState([]);
   const [verifyResult, setVerifyResult] = useState(null);
   const [tamperedIds, setTamperedIds] = useState(new Set());
@@ -142,6 +148,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#000000] text-[#f0ece9]">
+      {captchaSiteKey && !captchaVerified && (
+        <CaptchaGate siteKey={captchaSiteKey} onVerified={() => setCaptchaVerified(true)} />
+      )}
       <Header
         entryCount={records.length}
         chainValid={verifyResult?.valid ?? null}

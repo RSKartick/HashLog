@@ -15,6 +15,7 @@ HASHLOG_CORS_ORIGINS=https://YOUR-FRONTEND.vercel.app
 HASHLOG_API_KEY=use-a-long-random-value
 HASHLOG_ENABLE_TAMPER_TEST=false
 HASHLOG_SIGNING_SECRET=use-a-long-random-value
+TURNSTILE_SECRET_KEY=your-cloudflare-turnstile-secret
 ```
 
 Deploy it and test:
@@ -34,6 +35,7 @@ Set this frontend environment variable:
 VITE_API_BASE_URL=https://YOUR-BACKEND.vercel.app/api
 # Must match HASHLOG_API_KEY if backend authentication is enabled.
 VITE_API_KEY=the-same-value-used-by-the-backend
+VITE_TURNSTILE_SITE_KEY=your-cloudflare-turnstile-site-key
 ```
 
 Redeploy after setting it. Local development still uses the Vite proxy when

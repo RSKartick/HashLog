@@ -85,6 +85,19 @@ class RecordVerifyRequest(BaseModel):
     content: Any
 
 
+class CaptchaVerifyRequest(BaseModel):
+    """One-time Cloudflare Turnstile token sent by the browser."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(..., min_length=1, max_length=4096)
+
+
+class CaptchaVerifyResponse(BaseModel):
+    success: bool
+    message: str
+
+
 class RecordVerifyResponse(BaseModel):
     """Comparison between current external content and its trusted hash."""
 

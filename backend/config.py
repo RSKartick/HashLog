@@ -47,3 +47,8 @@ def tamper_test_enabled() -> bool:
 def signing_secret() -> str:
     """Secret used to sign downloadable audit certificates and anchors."""
     return os.getenv("HASHLOG_SIGNING_SECRET", "hashlog-local-demo-signing-secret")
+
+
+def turnstile_secret_key() -> str | None:
+    value = os.getenv("TURNSTILE_SECRET_KEY", "").strip()
+    return value or None

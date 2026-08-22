@@ -115,5 +115,10 @@ export async function healthCheck() {
   return data;
 }
 
+export async function verifyCaptcha(token) {
+  const { data } = await api.post("/captcha/verify", { token });
+  return data;
+}
+
 
 

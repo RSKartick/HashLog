@@ -18,12 +18,14 @@ import sqlite3
 import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest, urlopen
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from .config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled
+    from .config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled, turnstile_secret_key
     from .database import db_session, init_db
     from .hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from .models import (
@@ -41,9 +43,11 @@ try:
         TamperTestResponse,
         AuditCertificateResponse,
         CheckpointAnchorResponse,
+        CaptchaVerifyRequest,
+        CaptchaVerifyResponse,
     )
 except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend/.
-    from config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled
+    from config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled, turnstile_secret_key
     from database import db_session, init_db
     from hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from models import (
@@ -61,6 +65,8 @@ except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend
         TamperTestResponse,
         AuditCertificateResponse,
         CheckpointAnchorResponse,
+        CaptchaVerifyRequest,
+        CaptchaVerifyResponse,
     )
 
 
@@ -586,6 +592,30 @@ def health_check() -> HealthResponse:
             "count"
         ]
     return HealthResponse(status="ok", total_hash_records=total)
+
+
+@app.post("/api/captcha/verify", response_model=CaptchaVerifyResponse)
+def verify_captcha(request: CaptchaVerifyRequest) -> CaptchaVerifyResponse:
+    """Validate a Turnstile token server-side before first app access."""
+    secret = turnstile_secret_key()
+    if secret is None:
+        # Local development can run without a provider configuration.
+        return CaptchaVerifyResponse(success=True, message="CAPTCHA is not configured in this environment")
+    body = urlencode({"secret": secret, "response": request.token}).encode("utf-8")
+    try:
+        http_request = UrlRequest(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data=body,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            method="POST",
+        )
+        with urlopen(http_request, timeout=8) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:  # network/provider failures should not expose internals
+        raise HTTPException(status_code=502, detail="CAPTCHA verification service unavailable") from exc
+    if not result.get("success"):
+        return CaptchaVerifyResponse(success=False, message="CAPTCHA verification failed")
+    return CaptchaVerifyResponse(success=True, message="CAPTCHA verified")
 
 
 @app.get("/")
