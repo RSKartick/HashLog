@@ -1,17 +1,34 @@
-# HashLog backend
+# HashLog Backend
 
-FastAPI service for an append-only, hash-linked audit trail. The public API
-will live under `/api`; interactive documentation will be available at `/docs`.
+FastAPI service for an append-only, cryptographic hash-linked audit trail.
 
-## Local setup
+* Main Documentation: [Root README.md](../README.md)
+* Interactive Swagger Docs: `http://localhost:3000/docs` (or `http://localhost:8000/docs`)
+* API Prefix: `/api`
 
-```powershell
-cd backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+## Local Setup
+
+### 1. Create and Activate Virtual Environment
+* **Linux / macOS:**
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  ```
+* **Windows (PowerShell):**
+  ```powershell
+  python -m venv .venv
+  .\.venv\Scripts\Activate.ps1
+  ```
+
+### 2. Install Dependencies
+```bash
 pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
 ```
 
-Use `backend/.env.example` as the reference for local configuration. The
-database is intentionally local-only and is not committed to Git.
+### 3. Run Server
+```bash
+uvicorn main:app --reload --port 3000
+```
+
+Use `backend/.env.example` as reference for local configuration. The SQLite database is created automatically upon startup.
+
