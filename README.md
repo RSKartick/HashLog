@@ -306,6 +306,13 @@ Traverses and cryptographically recomputes the entire global ledger and every ve
 
 ---
 
+### 5. Bot Protection
+
+#### `POST /api/captcha/verify`
+Server-side verification of a Cloudflare Turnstile token (`TURNSTILE_SECRET_KEY`), used to gate access before write operations. Not documented via the interactive OpenAPI schema view.
+
+---
+
 ## Database Schema
 
 HashLog manages two append-only relational tables in SQLite (`backend/hashlog.db`):
@@ -500,18 +507,20 @@ print('Corrupted record #1 content hash in SQLite.')
 
 ## Configuration & Environment Variables
 
-HashLog supports comprehensive environment variable configuration:
+HashLog supports comprehensive environment variable configuration across backend and frontend tiers:
 
 | Variable | Default Value | Description |
 | :--- | :--- | :--- |
 | `HASHLOG_DATABASE_PATH` | `hashlog.db` | Path to the SQLite database file (falls back to `/tmp/hashlog.db` on Vercel) |
-| `HASHLOG_API_KEY` | `None` (Disabled) | Secret token required in `X-API-Key` header |
-| `HASHLOG_RATE_LIMIT_PER_MINUTE` | `120` | Maximum requests per minute per client IP |
+| `HASHLOG_API_KEY` | `None` (Disabled) | Secret token required in `X-API-Key` header. Applied as a global FastAPI dependency, so once set it gates **every** route — including `/api/health` and `/api/captcha/verify`, not just the write endpoints |
+| `HASHLOG_RATE_LIMIT_PER_MINUTE` | `120` | Maximum requests per minute per client IP, keyed on the raw socket address (`request.client.host`) — **not** `X-Forwarded-For` aware, so all clients behind the same reverse proxy share one bucket |
 | `HASHLOG_CORS_ORIGINS` | `http://localhost:5173` | Comma-separated list of allowed browser origins |
-| `HASHLOG_SIGNING_SECRET` | `hashlog-local-demo-signing-secret` | Secret key used for HMAC-SHA256 certificate and anchor signatures |
-| `HASHLOG_ENABLE_TAMPER_TEST` | `false` | Enables `/api/dev/tamper` endpoints for development demonstrations |
+| `HASHLOG_SIGNING_SECRET` | `hashlog-local-demo-signing-secret` | Secret key used for HMAC-SHA256 certificate and anchor signatures. Falls back silently to the demo value if unset — **set this explicitly in production**, it does not fail startup on its own |
+| `HASHLOG_ENABLE_TAMPER_TEST` | `false` | Enables `/api/dev/tamper` endpoints for local development demonstrations |
+| `TURNSTILE_SECRET_KEY` | `None` | Cloudflare Turnstile secret key for server-side token validation |
 | `VITE_API_BASE_URL` | `/api` | Base API URL consumed by the React frontend |
 | `VITE_API_KEY` | `None` | Optional client API key sent in `X-API-Key` request header |
+| `VITE_TURNSTILE_SITE_KEY` | `None` | Optional Cloudflare Turnstile public site key for human verification gate |
 
 ---
 
@@ -549,6 +558,7 @@ HashLog/
 │   ├── vercel.json           # Vercel SPA rewrite rules
 │   ├── vite.config.js        # Vite dev server configuration & API proxy
 │   └── src/
+│       ├── main.jsx          # React entry point, mounts <App /> to the DOM
 │       ├── App.jsx           # Master application container & state router
 │       ├── api.js            # API client with SHA-256 fallback simulation
 │       ├── index.css         # Noise texture, custom scrollbars, & animations
@@ -563,8 +573,8 @@ HashLog/
 │           ├── CheckpointButton.jsx   # Point-in-time state snapshot manager
 │           ├── EntryList.jsx          # Filterable & searchable immutable proof vault
 │           ├── EntryCard.jsx          # Individual proof card with copyable digests
+│           ├── CaptchaGate.jsx        # Cloudflare Turnstile human-verification gate
 │           └── StatusBar.jsx          # Footer telemetry & active node heartbeat
-├── VERCEL_DEPLOYMENT.md      # Step-by-step Vercel multi-project deployment guide
 ├── requirements.txt          # Root Python dependencies for serverless runtime
 ├── run_all.sh                # Test runner executing backend pytest & frontend build
 └── README.md                 # Master project documentation
@@ -574,6 +584,6 @@ HashLog/
 
 ## License
 
-This project is open source and available under the [MIT License](LICENSE).
+No `LICENSE` file is currently present in this repository, so no license is granted for reuse. Add one (e.g. MIT) if you intend this project to be open source.
 
 
