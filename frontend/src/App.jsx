@@ -3,12 +3,12 @@ import Header from "./components/Header.jsx";
 import Hero from "./components/Hero.jsx";
 import StatsBar from "./components/StatsBar.jsx";
 import ChainVisualization from "./components/ChainVisualization.jsx";
+import Timeline from "./components/Timeline.jsx";
 import AddEntry from "./components/AddEntry.jsx";
 import VerifyRecord from "./components/VerifyRecord.jsx";
 import CheckpointButton from "./components/CheckpointButton.jsx";
 import EntryList from "./components/EntryList.jsx";
 import StatusBar from "./components/StatusBar.jsx";
-import TamperLab from "./components/TamperLab.jsx";
 import CaptchaGate from "./components/CaptchaGate.jsx";
 import {
   listRecords,
@@ -166,11 +166,6 @@ export default function App() {
     }
   };
 
-  const handleTamperApplied = async () => {
-    await fetchRecords();
-    await handleVerifyLedger();
-  };
-
   const handleAuthorizedVersion = async () => {
     await fetchRecords();
     await handleVerifyLedger();
@@ -216,6 +211,8 @@ export default function App() {
       <main className="space-y-4">
         <ChainVisualization records={records} tamperedIds={tamperedIds} logSnapshots={logSnapshots} />
 
+        <Timeline records={records} />
+
         <AddEntry
           onSubmit={handleRegister}
           onBatchSubmit={handleBatchImport}
@@ -230,12 +227,6 @@ export default function App() {
           onAuthorizedVersion={handleAuthorizedVersion}
           onCurrentLogObserved={handleCurrentLogObserved}
           logSnapshots={logSnapshots}
-        />
-
-        <TamperLab
-          records={records}
-          onTamperApplied={handleTamperApplied}
-          onMessage={showToast}
         />
 
         <CheckpointButton
