@@ -116,6 +116,17 @@ class CheckpointResponse(BaseModel):
     created_at: str | None = None
 
 
+class CheckpointVerifyResponse(BaseModel):
+    """Whether a stored checkpoint still matches the ledger at its boundary."""
+
+    valid: bool
+    checkpoint_id: int
+    last_record_id: int
+    expected_ledger_hash: str
+    actual_ledger_hash: str | None
+    message: str
+
+
 class HealthResponse(BaseModel):
     """Basic service and ledger status."""
 

@@ -98,3 +98,25 @@ For a tampered chain:
 }
 For now, your friend can use mock data matching these response formats. When the backend endpoints are ready, they only need to replace the mock functions with the real API calls.
 Tell your friend not to edit anything inside backend/. The frontend work should stay inside frontend/.
+
+NEW UPADTED INSTRUCTION FOR THISIS THAT:
+
+he immediate next step is to update the frontend work to use the new hash-only API. The previous frontend instructions used /api/entries, which belong to the old design.
+Tell your frontend friend to use:
+POST /api/records/register
+POST /api/records/import
+GET  /api/records
+GET  /api/records/history
+POST /api/records/verify
+GET  /api/ledger/verify
+GET  /api/health
+Then our project sequence should be:
+1. Frontend integration with the new API
+2. Test the complete flow together
+3. Add external database/file connectors
+4. Add independent checkpoint storage
+5. Add authentication and permissions
+6. Move from SQLite to PostgreSQL for production
+7. Add deployment configuration
+The next backend-specific improvement after frontend integration is an external connector. That will let HashLog read records from a real JSON/CSV file or another database, hash them, and save only the hash proof.
+Important: the current backend is ready for frontend integration, but the old frontend assignment must be replaced with the new hash-only API contract.

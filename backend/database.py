@@ -49,7 +49,11 @@ def get_db() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create the schema and database-level append-only protections."""
+    """Create the HashLog schema and lookup indexes.
+
+    The application exposes no update/delete routes. Direct database edits are
+    intentionally still possible for the tamper-detection demonstration.
+    """
     DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = get_db()
     try:

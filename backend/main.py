@@ -1,22 +1,32 @@
 """FastAPI application for the HashLog external integrity ledger."""
 
+#to run the app
+
+#pip install -r requirements-dev.txt
+
+#cd backend
+#uvicorn main:app --reload --port 8000
+
+
 from __future__ import annotations
 
 import json
+import secrets
 import sqlite3
 import time
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from .config import cors_origins
+    from .config import api_key, cors_origins, rate_limit_per_minute
     from .database import db_session, init_db
     from .hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from .models import (
         CheckpointResponse,
+        CheckpointVerifyResponse,
         HashRecordResponse,
         HealthResponse,
         ImportRequest,
@@ -27,11 +37,12 @@ try:
         RecordVerifyResponse,
     )
 except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend/.
-    from config import cors_origins
+    from config import api_key, cors_origins, rate_limit_per_minute
     from database import db_session, init_db
     from hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from models import (
         CheckpointResponse,
+        CheckpointVerifyResponse,
         HashRecordResponse,
         HealthResponse,
         ImportRequest,
@@ -41,6 +52,26 @@ except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend
         RecordVerifyRequest,
         RecordVerifyResponse,
     )
+
+
+_rate_limit_hits: dict[str, list[float]] = {}
+
+
+def require_api_key(
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+) -> None:
+    """Require X-API-Key only when HASHLOG_API_KEY is configured."""
+    expected = api_key()
+    if expected is not None and not secrets.compare_digest(x_api_key or "", expected):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    recent = [stamp for stamp in _rate_limit_hits.get(client, []) if now - stamp < 60]
+    if len(recent) >= rate_limit_per_minute():
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    recent.append(now)
+    _rate_limit_hits[client] = recent
 
 
 @asynccontextmanager
@@ -58,6 +89,7 @@ app = FastAPI(
     ),
     version="2.0.0",
     lifespan=lifespan,
+    dependencies=[Depends(require_api_key)],
 )
 app.add_middleware(
     CORSMiddleware,
@@ -386,6 +418,39 @@ def list_checkpoints() -> list[CheckpointResponse]:
     with db_session() as connection:
         rows = connection.execute("SELECT * FROM checkpoints ORDER BY id DESC").fetchall()
     return [CheckpointResponse(**dict(row)) for row in rows]
+
+
+@app.get(
+    "/api/checkpoints/{checkpoint_id}/verify",
+    response_model=CheckpointVerifyResponse,
+)
+def verify_checkpoint(checkpoint_id: int) -> CheckpointVerifyResponse:
+    """Verify all ledger records covered by one checkpoint."""
+    with db_session() as connection:
+        checkpoint = connection.execute(
+            "SELECT * FROM checkpoints WHERE id = ?", (checkpoint_id,)
+        ).fetchone()
+        if checkpoint is None:
+            raise HTTPException(status_code=404, detail="Checkpoint not found")
+        rows = connection.execute(
+            "SELECT * FROM hash_records WHERE id <= ? ORDER BY id ASC",
+            (checkpoint["last_record_id"],),
+        ).fetchall()
+    ledger_result = _verify_ledger_rows(rows)
+    actual_hash = rows[-1]["entry_hash"] if rows else None
+    valid = ledger_result.valid and actual_hash == checkpoint["ledger_hash"]
+    return CheckpointVerifyResponse(
+        valid=valid,
+        checkpoint_id=checkpoint_id,
+        last_record_id=checkpoint["last_record_id"],
+        expected_ledger_hash=checkpoint["ledger_hash"],
+        actual_ledger_hash=actual_hash,
+        message=(
+            "Checkpoint matches the ledger"
+            if valid
+            else "Ledger no longer matches this checkpoint"
+        ),
+    )
 
 
 @app.get("/api/export", response_model=list[HashRecordResponse])
