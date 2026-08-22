@@ -2,7 +2,10 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: "/api",
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    ...(import.meta.env.VITE_API_KEY && { "X-API-Key": import.meta.env.VITE_API_KEY }),
+  },
 });
 
 // ---------- Records ----------
