@@ -239,6 +239,27 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
             </div>
           )}
         </div>
+
+        <div className="border border-[#2e2e2e] bg-[#050505] rounded-[4px] p-3">
+          <div className="font-mono text-[10px] uppercase tracking-wider text-[#c9793f] mb-3">Trust Timeline</div>
+          <div className="space-y-2 font-mono text-[10px]">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-300">✓</span>
+              <span className="text-[#8a8480]">{new Date(record.timestamp).toLocaleString()}</span>
+              <span className="text-[#f0ece9]">Record registered</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-300">✓</span>
+              <span className="text-[#8a8480]">v{record.version_number}</span>
+              <span className="text-[#f0ece9]">Version sealed into ledger</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={tampered ? "text-red-300" : "text-emerald-300"}>{tampered ? "⚠" : "✓"}</span>
+              <span className="text-[#8a8480]">{new Date(record.timestamp).toLocaleString()}</span>
+              <span className={tampered ? "text-red-300" : "text-[#f0ece9]"}>{tampered ? "Integrity violation detected" : "Hash matches stored content"}</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
