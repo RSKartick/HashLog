@@ -362,7 +362,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
 
                   <div className="bg-[#050505] border border-[#1f1f1f] rounded-[4px] p-3">
                     <span className="font-mono text-[10px] text-[#8a8480] uppercase block mb-2">
-                      Parsed {batchParsed.length} rows. The complete file will be stored as one proof:
+                      Previewed {batchParsed.length} rows. The complete file will be stored as one proof:
                     </span>
                     <div className="space-y-1 max-h-32 overflow-y-auto font-mono text-[10px] text-[#b8b2ae]">
                       {batchParsed.slice(0, 4).map((rec, i) => (

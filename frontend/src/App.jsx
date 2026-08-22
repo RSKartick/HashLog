@@ -26,6 +26,7 @@ export default function App() {
   const [loading, setLoading] = useState({ entry: false, verify: false, upload: false });
   const [toast, setToast] = useState(null);
   const [checkpointsCount, setCheckpointsCount] = useState(0);
+  const [recordsLoading, setRecordsLoading] = useState(true);
 
   const showToast = (message) => {
     setToast(message);
@@ -33,6 +34,7 @@ export default function App() {
   };
 
   const fetchRecords = useCallback(async () => {
+    setRecordsLoading(true);
     try {
       const data = await listRecords();
       const list = Array.isArray(data) ? data : [];
@@ -40,6 +42,8 @@ export default function App() {
     } catch {
       setRecords([]);
       showToast("Failed to fetch ledger — check API connectivity");
+    } finally {
+      setRecordsLoading(false);
     }
   }, []);
 
@@ -187,10 +191,10 @@ export default function App() {
         />
 
         <CheckpointButton
-          onCheckpointAdded={() => setCheckpointsCount((c) => c + 1)}
+          onCheckpointCountChange={setCheckpointsCount}
         />
 
-        <EntryList records={records} tamperedIds={tamperedIds} />
+        <EntryList records={records} tamperedIds={tamperedIds} loading={recordsLoading} />
       </main>
 
       <StatusBar

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { FiInbox, FiSearch, FiFilter, FiArrowDown, FiArrowUp, FiDatabase } from "react-icons/fi";
 import EntryCard from "./EntryCard.jsx";
 
-export default function EntryList({ records, tamperedIds }) {
+export default function EntryList({ records, tamperedIds, loading = false }) {
   const [search, setSearch] = useState("");
   const [selectedSystem, setSelectedSystem] = useState("all");
   const [sortOrder, setSortOrder] = useState("desc"); // "desc" | "asc"
@@ -92,7 +92,11 @@ export default function EntryList({ records, tamperedIds }) {
       </div>
 
       {/* Record Cards */}
-      {filteredRecords.length === 0 ? (
+      {loading ? (
+        <div className="instrument-card py-16 text-center font-mono text-xs text-[#8a8480]">
+          Loading ledger proofs...
+        </div>
+      ) : filteredRecords.length === 0 ? (
         <div className="instrument-card py-16 text-center">
           <FiInbox className="w-8 h-8 text-[#5a5654] mx-auto mb-3" />
           <h3 className="font-serif text-lg text-[#f0ece9] font-normal mb-1">

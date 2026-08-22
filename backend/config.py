@@ -5,7 +5,13 @@ import os
 
 
 BACKEND_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = BACKEND_DIR / os.getenv("HASHLOG_DATABASE_PATH", "hashlog.db")
+_database_setting = os.getenv("HASHLOG_DATABASE_PATH", "hashlog.db")
+# Vercel's deployed filesystem is read-only. /tmp is writable but ephemeral;
+# use an external database for durable production data.
+if os.getenv("VERCEL") == "1" and "HASHLOG_DATABASE_PATH" not in os.environ:
+    DATABASE_PATH = Path("/tmp/hashlog.db")
+else:
+    DATABASE_PATH = BACKEND_DIR / _database_setting
 
 
 def cors_origins() -> list[str]:
@@ -29,8 +35,8 @@ def rate_limit_per_minute() -> int:
 
 
 def tamper_test_enabled() -> bool:
-    """Allow the local development-only tamper simulator by default."""
-    return os.getenv("HASHLOG_ENABLE_TAMPER_TEST", "true").strip().lower() in {
+    """Allow the local development-only tamper simulator only when enabled."""
+    return os.getenv("HASHLOG_ENABLE_TAMPER_TEST", "false").strip().lower() in {
         "1",
         "true",
         "yes",

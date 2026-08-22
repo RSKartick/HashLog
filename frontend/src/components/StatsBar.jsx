@@ -4,11 +4,16 @@ import { FiDatabase, FiShield, FiCheckCircle, FiAlertTriangle, FiCopy, FiCheck, 
 export default function StatsBar({ recordCount, verifyResult, latestHash, checkpointsCount }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopyHash = () => {
+  const handleCopyHash = async () => {
     if (!latestHash) return;
-    navigator.clipboard.writeText(latestHash);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(latestHash);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this ledger root hash:", latestHash);
+    }
   };
 
   const isTampered = verifyResult && !verifyResult.valid;

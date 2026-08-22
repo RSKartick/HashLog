@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { FiCpu, FiPlus, FiCheckCircle, FiAlertTriangle, FiCheck, FiCopy, FiClock, FiLock, FiShield } from "react-icons/fi";
 import { createCheckpoint, listCheckpoints, verifyCheckpoint, getCheckpointAnchor } from "../api.js";
 
-export default function CheckpointButton({ onCheckpointAdded }) {
+export default function CheckpointButton({ onCheckpointAdded, onCheckpointCountChange }) {
   const [checkpoints, setCheckpoints] = useState([]);
   const [loading, setLoading] = useState(false);
   const [verifyingId, setVerifyingId] = useState(null);
@@ -12,7 +12,9 @@ export default function CheckpointButton({ onCheckpointAdded }) {
   const fetchCheckpointsList = async () => {
     try {
       const data = await listCheckpoints();
-      setCheckpoints(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setCheckpoints(list);
+      onCheckpointCountChange?.(list.length);
     } catch {
       setCheckpoints([]);
     }
@@ -50,10 +52,15 @@ export default function CheckpointButton({ onCheckpointAdded }) {
     }
   };
 
-  const copyHash = (hash, id) => {
-    navigator.clipboard.writeText(hash);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const copyHash = async (hash, id) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(hash);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      window.prompt("Copy this checkpoint hash:", hash);
+    }
   };
 
   const downloadAnchor = async (id) => {

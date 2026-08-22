@@ -44,10 +44,15 @@ export default function ChainVisualization({ records, tamperedIds }) {
     );
   }
 
-  const copyToClipboard = (text, key) => {
-    navigator.clipboard.writeText(text);
-    setCopiedHash(key);
-    setTimeout(() => setCopiedHash(null), 2000);
+  const copyToClipboard = async (text, key) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(text);
+      setCopiedHash(key);
+      setTimeout(() => setCopiedHash(null), 2000);
+    } catch {
+      window.prompt("Copy this hash:", text);
+    }
   };
 
   return (

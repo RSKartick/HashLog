@@ -209,6 +209,9 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
                 Verifying file identity: <span className="text-[#c9793f]">{recordId}</span>
               </div>
             )}
+            <div className="font-mono text-[10px] text-[#8a8480]">
+              Source system and record type must match the values used when this file was registered.
+            </div>
 
             <div>
               <div className="flex items-center justify-between mb-1">
