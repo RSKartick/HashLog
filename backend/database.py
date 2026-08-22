@@ -1,34 +1,46 @@
-"""this is for adding the schema and addingthe core database str to the projeect"""
-#main databse part of this whole app
+"""SQLite connection and schema management for the HashLog ledger."""
 from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from config import DATABASE_PATH
+try:
+    from .config import DATABASE_PATH
+except ImportError:  # pragma: no cover - supports running from backend/.
+    from config import DATABASE_PATH
 
 
-CREATE_ENTRIES_TABLE = """
-CREATE TABLE IF NOT EXISTS entries (
+CREATE_HASH_RECORDS_TABLE = """
+CREATE TABLE IF NOT EXISTS hash_records (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    data TEXT NOT NULL,
-    file_hash TEXT,
-    timestamp INTEGER NOT NULL,
-    prev_hash TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    record_type TEXT NOT NULL,
+    record_id TEXT NOT NULL,
+    version_number INTEGER NOT NULL,
+    content_hash TEXT NOT NULL,
     entry_hash TEXT NOT NULL,
-    nonce INTEGER NOT NULL DEFAULT 0,
+    previous_version_hash TEXT,
+    previous_ledger_hash TEXT NOT NULL,
+    timestamp INTEGER NOT NULL,
     metadata TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_system, record_type, record_id, version_number)
+)
+"""
+
+CREATE_CHECKPOINTS_TABLE = """
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    last_record_id INTEGER NOT NULL,
+    ledger_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 """
-#the prev_hash and the entry_hash are the most importanat part of this as they are the core hashing storing field
-#also used for creating chain for this
 
 
 def get_db() -> sqlite3.Connection:
-    """Open a database with each of the rows and colomns"""
+    """Open a database connection with dictionary-like rows."""
     connection = sqlite3.connect(DATABASE_PATH, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
@@ -42,14 +54,19 @@ def init_db() -> None:
     connection = get_db()
     try:
         connection.execute("PRAGMA journal_mode = WAL")
-        connection.execute(CREATE_ENTRIES_TABLE)
+        connection.execute(CREATE_HASH_RECORDS_TABLE)
+        connection.execute(CREATE_CHECKPOINTS_TABLE)
         connection.execute(
-            "CREATE INDEX IF NOT EXISTS idx_entries_entry_hash "
-            "ON entries(entry_hash)"
+            "CREATE INDEX IF NOT EXISTS idx_hash_records_identity "
+            "ON hash_records(source_system, record_type, record_id, version_number)"
         )
         connection.execute(
-            "CREATE INDEX IF NOT EXISTS idx_entries_prev_hash "
-            "ON entries(prev_hash)"
+            "CREATE INDEX IF NOT EXISTS idx_hash_records_content_hash "
+            "ON hash_records(content_hash)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hash_records_ledger_hash "
+            "ON hash_records(previous_ledger_hash)"
         )
         connection.commit()
     finally:

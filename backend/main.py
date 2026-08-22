@@ -1,4 +1,4 @@
-"""FastAPI application for the HashLog tamper-evident log."""
+"""FastAPI application for the HashLog external integrity ledger."""
 
 from __future__ import annotations
 
@@ -11,32 +11,54 @@ from typing import Annotated, Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-try:  # Supports both `uvicorn main:app` from backend/ and package imports.
+try:
     from .config import cors_origins
     from .database import db_session, init_db
-    from .hash_utils import GENESIS_HASH, compute_entry_hash
-    from .models import EntryCreate, EntryResponse, HealthResponse, VerifyResponse
-except ImportError:  # pragma: no cover - exercised by the local uvicorn command.
+    from .hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
+    from .models import (
+        CheckpointResponse,
+        HashRecordResponse,
+        HealthResponse,
+        ImportRequest,
+        ImportResponse,
+        LedgerVerifyResponse,
+        RecordRegister,
+        RecordVerifyRequest,
+        RecordVerifyResponse,
+    )
+except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend/.
     from config import cors_origins
     from database import db_session, init_db
-    from hash_utils import GENESIS_HASH, compute_entry_hash
-    from models import EntryCreate, EntryResponse, HealthResponse, VerifyResponse
+    from hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
+    from models import (
+        CheckpointResponse,
+        HashRecordResponse,
+        HealthResponse,
+        ImportRequest,
+        ImportResponse,
+        LedgerVerifyResponse,
+        RecordRegister,
+        RecordVerifyRequest,
+        RecordVerifyResponse,
+    )
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Initialize the local schema before the server accepts requests."""
+    """Initialize the schema before accepting requests."""
     init_db()
     yield
 
 
 app = FastAPI(
     title="HashLog API",
-    description="Tamper-evident, cryptographically linked audit trail.",
-    version="1.0.0",
+    description=(
+        "Hash-only, append-only integrity ledger for records imported from "
+        "external systems."
+    ),
+    version="2.0.0",
     lifespan=lifespan,
 )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
@@ -46,8 +68,13 @@ app.add_middleware(
 )
 
 
+def _metadata_json(metadata: dict[str, Any] | None) -> str | None:
+    if metadata is None:
+        return None
+    return json.dumps(metadata, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 def _parse_metadata(value: str | None) -> dict[str, Any] | None:
-    """Decode the JSON metadata stored in SQLite."""
     if value is None:
         return None
     try:
@@ -57,157 +84,327 @@ def _parse_metadata(value: str | None) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-def _entry_from_row(row: sqlite3.Row) -> EntryResponse:
-    """Convert a SQLite row to the public response schema."""
-    entry = dict(row)
-    entry["metadata"] = _parse_metadata(entry.get("metadata"))
-    return EntryResponse(**entry)
+def _response_from_row(row: sqlite3.Row) -> HashRecordResponse:
+    item = dict(row)
+    item["metadata"] = _parse_metadata(item.get("metadata"))
+    return HashRecordResponse(**item)
 
 
-def _last_entry_hash(connection: sqlite3.Connection) -> str:
+def _identity_where(source_system: str, record_type: str, record_id: str) -> tuple[str, tuple[str, str, str]]:
+    return (
+        "source_system = ? AND record_type = ? AND record_id = ?",
+        (source_system, record_type, record_id),
+    )
+
+
+def _latest_for_identity(
+    connection: sqlite3.Connection,
+    source_system: str,
+    record_type: str,
+    record_id: str,
+) -> sqlite3.Row | None:
+    where, values = _identity_where(source_system, record_type, record_id)
+    return connection.execute(
+        f"SELECT * FROM hash_records WHERE {where} ORDER BY version_number DESC LIMIT 1",
+        values,
+    ).fetchone()
+
+
+def _last_ledger_hash(connection: sqlite3.Connection) -> str:
     row = connection.execute(
-        "SELECT entry_hash FROM entries ORDER BY id DESC LIMIT 1"
+        "SELECT entry_hash FROM hash_records ORDER BY id DESC LIMIT 1"
     ).fetchone()
     return row["entry_hash"] if row else GENESIS_HASH
 
 
-@app.post("/api/entries", response_model=EntryResponse, status_code=201)
-def create_entry(entry: EntryCreate) -> EntryResponse:
-    """Append one entry to the end of the hash chain."""
-    try:
-        with db_session() as connection:
-            # Serialize writers so two simultaneous requests cannot share a
-            # previous hash and fork the chain.
-            connection.execute("BEGIN IMMEDIATE")
-            prev_hash = _last_entry_hash(connection)
-            timestamp = time.time_ns() // 1_000_000
-            nonce = 0
-            entry_hash = compute_entry_hash(
-                prev_hash=prev_hash,
-                timestamp=timestamp,
-                user_id=entry.user_id,
-                data=entry.data,
-                file_hash=entry.file_hash,
-                nonce=nonce,
-            )
-            metadata_json = (
-                json.dumps(entry.metadata, ensure_ascii=False, separators=(",", ":"))
-                if entry.metadata is not None
-                else None
-            )
-            cursor = connection.execute(
-                """
-                INSERT INTO entries
-                    (user_id, data, file_hash, timestamp, prev_hash,
-                     entry_hash, nonce, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    entry.user_id,
-                    entry.data,
-                    entry.file_hash,
-                    timestamp,
-                    prev_hash,
-                    entry_hash,
-                    nonce,
-                    metadata_json,
-                ),
-            )
-            row = connection.execute(
-                "SELECT * FROM entries WHERE id = ?", (cursor.lastrowid,)
-            ).fetchone()
-            assert row is not None
-            return _entry_from_row(row)
-    except sqlite3.Error as exc:
-        raise HTTPException(status_code=500, detail="Could not save entry") from exc
-
-
-@app.get("/api/entries", response_model=list[EntryResponse])
-def list_entries(
-    limit: Annotated[int, Query(ge=1, le=1_000)] = 100,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> list[EntryResponse]:
-    """Return entries newest first, with bounded pagination."""
-    with db_session() as connection:
-        rows = connection.execute(
-            "SELECT * FROM entries ORDER BY id DESC LIMIT ? OFFSET ?",
-            (limit, offset),
-        ).fetchall()
-    return [_entry_from_row(row) for row in rows]
-
-
-@app.get("/api/entries/{entry_id}", response_model=EntryResponse)
-def get_entry(entry_id: int) -> EntryResponse:
-    """Return one entry by its database ID."""
-    with db_session() as connection:
-        row = connection.execute(
-            "SELECT * FROM entries WHERE id = ?", (entry_id,)
-        ).fetchone()
+def _append_hash_record(
+    connection: sqlite3.Connection,
+    *,
+    source_system: str,
+    record_type: str,
+    record_id: str,
+    content: Any,
+    metadata: dict[str, Any] | None,
+) -> HashRecordResponse:
+    """Hash content in memory and append only its proof to SQLite."""
+    latest = _latest_for_identity(connection, source_system, record_type, record_id)
+    version_number = (latest["version_number"] + 1) if latest else 1
+    previous_version_hash = latest["entry_hash"] if latest else None
+    previous_ledger_hash = _last_ledger_hash(connection)
+    timestamp = time.time_ns() // 1_000_000
+    content_hash = compute_content_hash(content)
+    entry_hash = compute_entry_hash(
+        previous_version_hash=previous_version_hash,
+        previous_ledger_hash=previous_ledger_hash,
+        source_system=source_system,
+        record_type=record_type,
+        record_id=record_id,
+        version_number=version_number,
+        content_hash=content_hash,
+        timestamp=timestamp,
+    )
+    cursor = connection.execute(
+        """
+        INSERT INTO hash_records
+            (source_system, record_type, record_id, version_number,
+             content_hash, entry_hash, previous_version_hash, previous_ledger_hash,
+             timestamp, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            source_system,
+            record_type,
+            record_id,
+            version_number,
+            content_hash,
+            entry_hash,
+            previous_version_hash,
+            previous_ledger_hash,
+            timestamp,
+            _metadata_json(metadata),
+        ),
+    )
+    row = connection.execute(
+        "SELECT * FROM hash_records WHERE id = ?", (cursor.lastrowid,)
+    ).fetchone()
     if row is None:
-        raise HTTPException(status_code=404, detail="Entry not found")
-    return _entry_from_row(row)
+        raise RuntimeError("Hash record was not created")
+    item = dict(row)
+    item["metadata"] = metadata
+    return HashRecordResponse(**item)
 
 
-@app.get("/api/verify", response_model=VerifyResponse)
-def verify_chain() -> VerifyResponse:
-    """Recompute the complete chain and report its first invalid entry."""
-    with db_session() as connection:
-        rows = connection.execute("SELECT * FROM entries ORDER BY id ASC").fetchall()
-
-    expected_previous = GENESIS_HASH
-    for row in rows:
-        entry = dict(row)
-        entry_id = entry["id"]
-        if entry["prev_hash"] != expected_previous:
-            return VerifyResponse(
-                valid=False,
-                tampered_at=entry_id,
-                total_entries=len(rows),
-                message=f"Tampering detected at entry #{entry_id}",
-            )
-        computed = compute_entry_hash(
-            prev_hash=expected_previous,
-            timestamp=entry["timestamp"],
-            user_id=entry["user_id"],
-            data=entry["data"],
-            file_hash=entry["file_hash"],
-            nonce=entry["nonce"],
-        )
-        if computed != entry["entry_hash"]:
-            return VerifyResponse(
-                valid=False,
-                tampered_at=entry_id,
-                total_entries=len(rows),
-                message=f"Tampering detected at entry #{entry_id}",
-            )
-        expected_previous = entry["entry_hash"]
-
-    return VerifyResponse(
-        valid=True,
-        total_entries=len(rows),
-        message="Chain is valid",
+# SQLite stores the ledger hash as a generated application value. This helper
+# keeps the value in the response while the schema stores it as content_hash
+# plus the links; the actual entry hash is reconstructed during verification.
+def _entry_hash_for_row(row: sqlite3.Row) -> str:
+    return compute_entry_hash(
+        previous_version_hash=row["previous_version_hash"],
+        previous_ledger_hash=row["previous_ledger_hash"],
+        source_system=row["source_system"],
+        record_type=row["record_type"],
+        record_id=row["record_id"],
+        version_number=row["version_number"],
+        content_hash=row["content_hash"],
+        timestamp=row["timestamp"],
     )
 
 
-@app.get("/api/export", response_model=list[EntryResponse])
-def export_log() -> list[EntryResponse]:
-    """Return the complete chain in chronological order."""
+def _response_with_entry_hash(row: sqlite3.Row) -> HashRecordResponse:
+    item = dict(row)
+    item["entry_hash"] = _entry_hash_for_row(row)
+    item["metadata"] = _parse_metadata(item.get("metadata"))
+    return HashRecordResponse(**item)
+
+
+@app.post("/api/records/register", response_model=HashRecordResponse, status_code=201)
+def register_record(request: RecordRegister) -> HashRecordResponse:
+    """Hash one external record and store only its integrity proof."""
+    try:
+        with db_session() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            result = _append_hash_record(
+                connection,
+                source_system=request.source_system,
+                record_type=request.record_type,
+                record_id=request.record_id,
+                content=request.content,
+                metadata=request.metadata,
+            )
+            return result
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=500, detail="Could not register record") from exc
+
+
+@app.post("/api/records/import", response_model=ImportResponse, status_code=201)
+def import_records(request: ImportRequest) -> ImportResponse:
+    """Hash a JSON batch in memory and persist only its hash proofs."""
+    try:
+        with db_session() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            results = [
+                _append_hash_record(
+                    connection,
+                    source_system=request.source_system,
+                    record_type=request.record_type,
+                    record_id=record.record_id,
+                    content=record.content,
+                    metadata=record.metadata,
+                )
+                for record in request.records
+            ]
+            return ImportResponse(
+                source_system=request.source_system,
+                record_type=request.record_type,
+                imported_count=len(results),
+                records=results,
+            )
+    except sqlite3.Error as exc:
+        raise HTTPException(status_code=500, detail="Could not import records") from exc
+
+
+@app.get("/api/records", response_model=list[HashRecordResponse])
+def list_records(
+    source_system: str | None = None,
+    record_type: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=1_000)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[HashRecordResponse]:
+    """List hash proofs without returning external record contents."""
+    clauses: list[str] = []
+    values: list[Any] = []
+    if source_system:
+        clauses.append("source_system = ?")
+        values.append(source_system)
+    if record_type:
+        clauses.append("record_type = ?")
+        values.append(record_type)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     with db_session() as connection:
-        rows = connection.execute("SELECT * FROM entries ORDER BY id ASC").fetchall()
-    return [_entry_from_row(row) for row in rows]
+        rows = connection.execute(
+            f"SELECT * FROM hash_records {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            (*values, limit, offset),
+        ).fetchall()
+    return [_response_with_entry_hash(row) for row in rows]
+
+
+@app.get("/api/records/history", response_model=list[HashRecordResponse])
+def record_history(
+    source_system: str,
+    record_type: str,
+    record_id: str,
+) -> list[HashRecordResponse]:
+    """Return every immutable hash version for one external record."""
+    where, values = _identity_where(source_system, record_type, record_id)
+    with db_session() as connection:
+        rows = connection.execute(
+            f"SELECT * FROM hash_records WHERE {where} ORDER BY version_number ASC",
+            values,
+        ).fetchall()
+    return [_response_with_entry_hash(row) for row in rows]
+
+
+@app.post("/api/records/verify", response_model=RecordVerifyResponse)
+def verify_external_record(request: RecordVerifyRequest) -> RecordVerifyResponse:
+    """Compare current external content with the latest registered hash."""
+    with db_session() as connection:
+        latest = _latest_for_identity(
+            connection, request.source_system, request.record_type, request.record_id
+        )
+    if latest is None:
+        raise HTTPException(status_code=404, detail="No trusted hash for this record")
+    actual_hash = compute_content_hash(request.content)
+    valid = actual_hash == latest["content_hash"]
+    return RecordVerifyResponse(
+        valid=valid,
+        source_system=request.source_system,
+        record_type=request.record_type,
+        record_id=request.record_id,
+        latest_version=latest["version_number"],
+        expected_hash=latest["content_hash"],
+        actual_hash=actual_hash,
+        message=(
+            "External record matches the latest registered version"
+            if valid
+            else "External record has changed since the latest registered version"
+        ),
+    )
+
+
+def _verify_ledger_rows(rows: list[sqlite3.Row]) -> LedgerVerifyResponse:
+    expected_ledger = GENESIS_HASH
+    latest_by_identity: dict[tuple[str, str, str], sqlite3.Row] = {}
+    for row in rows:
+        identity = (row["source_system"], row["record_type"], row["record_id"])
+        previous_for_record = latest_by_identity.get(identity)
+        expected_version = (previous_for_record["version_number"] + 1) if previous_for_record else 1
+        if (
+            row["previous_ledger_hash"] != expected_ledger
+            or row["version_number"] != expected_version
+            or row["previous_version_hash"]
+            != (previous_for_record["entry_hash"] if previous_for_record else None)
+        ):
+            return LedgerVerifyResponse(
+                valid=False,
+                tampered_at=row["id"],
+                total_records=len(rows),
+                message=f"Ledger tampering detected at record #{row['id']}",
+            )
+        computed = _entry_hash_for_row(row)
+        if row["entry_hash"] != computed:
+            return LedgerVerifyResponse(
+                valid=False,
+                tampered_at=row["id"],
+                total_records=len(rows),
+                message=f"Ledger tampering detected at record #{row['id']}",
+            )
+        expected_ledger = computed
+        row_dict = dict(row)
+        row_dict["entry_hash"] = computed
+        # Keep the fields needed for the next version without mutating SQLite.
+        latest_by_identity[identity] = _RowProxy(row_dict)  # type: ignore[assignment]
+    return LedgerVerifyResponse(valid=True, total_records=len(rows), message="Ledger is valid")
+
+
+class _RowProxy(dict):
+    """Minimal row-like object used by ledger verification state."""
+
+    def __getitem__(self, key: str) -> Any:
+        return super().__getitem__(key)
+
+
+@app.get("/api/ledger/verify", response_model=LedgerVerifyResponse)
+@app.get("/api/verify", response_model=LedgerVerifyResponse, include_in_schema=False)
+def verify_ledger() -> LedgerVerifyResponse:
+    """Verify the global ledger and every per-record version chain."""
+    with db_session() as connection:
+        rows = connection.execute("SELECT * FROM hash_records ORDER BY id ASC").fetchall()
+    return _verify_ledger_rows(rows)
+
+
+@app.post("/api/checkpoints", response_model=CheckpointResponse, status_code=201)
+def create_checkpoint() -> CheckpointResponse:
+    """Create a ledger-root checkpoint for later independent anchoring."""
+    with db_session() as connection:
+        latest = connection.execute(
+            "SELECT * FROM hash_records ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if latest is None:
+            raise HTTPException(status_code=400, detail="Cannot checkpoint an empty ledger")
+        cursor = connection.execute(
+            "INSERT INTO checkpoints (last_record_id, ledger_hash) VALUES (?, ?)",
+            (latest["id"], _entry_hash_for_row(latest)),
+        )
+        row = connection.execute(
+            "SELECT * FROM checkpoints WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone()
+    return CheckpointResponse(**dict(row))
+
+
+@app.get("/api/checkpoints", response_model=list[CheckpointResponse])
+def list_checkpoints() -> list[CheckpointResponse]:
+    with db_session() as connection:
+        rows = connection.execute("SELECT * FROM checkpoints ORDER BY id DESC").fetchall()
+    return [CheckpointResponse(**dict(row)) for row in rows]
+
+
+@app.get("/api/export", response_model=list[HashRecordResponse])
+def export_ledger() -> list[HashRecordResponse]:
+    """Export hash proofs only, in chronological order."""
+    with db_session() as connection:
+        rows = connection.execute("SELECT * FROM hash_records ORDER BY id ASC").fetchall()
+    return [_response_with_entry_hash(row) for row in rows]
 
 
 @app.get("/api/health", response_model=HealthResponse)
 def health_check() -> HealthResponse:
-    """Return service status and the number of stored entries."""
     with db_session() as connection:
-        count = connection.execute("SELECT COUNT(*) AS count FROM entries").fetchone()[
+        total = connection.execute("SELECT COUNT(*) AS count FROM hash_records").fetchone()[
             "count"
         ]
-    return HealthResponse(status="ok", total_entries=count)
+    return HealthResponse(status="ok", total_hash_records=total)
 
 
 @app.get("/")
 def root() -> dict[str, str]:
-    """Basic landing response for humans and deployment health probes."""
     return {"message": "HashLog API", "docs": "/docs"}
