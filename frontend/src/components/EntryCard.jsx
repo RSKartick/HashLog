@@ -10,6 +10,7 @@ function truncateHash(hash, chars = 10) {
 export default function EntryCard({ record, tampered, logSnapshot }) {
   const [expanded, setExpanded] = useState(false);
   const [showChanges, setShowChanges] = useState(false);
+  const [showRawLog, setShowRawLog] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
 
   const copyText = (text, key) => {
@@ -21,6 +22,7 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
 
   const originalLines = logSnapshot?.original?.split(/\r?\n/) || [];
   const currentLines = logSnapshot?.current?.split(/\r?\n/) || [];
+  const storedContent = logSnapshot?.current ?? record.raw_content;
   const changedLines = Array.from({ length: Math.max(originalLines.length, currentLines.length) }, (_, index) => ({
     number: index + 1,
     original: originalLines[index] ?? "",
@@ -83,6 +85,39 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
             <span>{record.record_type}</span>
           </div>
         </div>
+
+        {storedContent !== undefined && storedContent !== null && (
+          <button
+            type="button"
+            onClick={() => setShowRawLog((visible) => !visible)}
+            className="w-full text-left flex items-center justify-between border border-[#2e2e2e] bg-[#111111] hover:bg-[#181818] px-3 py-2 rounded-[4px] font-mono text-[10px] text-[#c9793f] hover:text-[#f0ece9]"
+          >
+            <span>{showRawLog ? "Hide raw log and changes" : "View raw log and changes"}</span>
+            <span>{changedLines.length ? `${changedLines.length} changed lines` : "Original snapshot"}</span>
+          </button>
+        )}
+
+        {showRawLog && storedContent !== undefined && storedContent !== null && (
+          <div className="border border-[#2e2e2e] bg-[#050505] rounded-[4px] p-3 space-y-3">
+            <div>
+              <div className="font-mono text-[9px] uppercase text-[#8a8480] mb-1">Stored log content</div>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[10px] text-[#f0ece9]">{typeof storedContent === "string" ? storedContent : JSON.stringify(storedContent, null, 2)}</pre>
+            </div>
+            {changedLines.length > 0 && (
+              <div className="space-y-1 font-mono text-[10px]">
+                <div className="text-[#8a8480] uppercase">Visual changes from original</div>
+                {changedLines.slice(0, 25).map((line) => (
+                  <div key={line.number} className="bg-[#111111] p-1.5">
+                    <span className="text-[#c9793f] mr-2">Line {line.number}</span>
+                    <span className="text-red-300">- {line.original || "(removed)"}</span>
+                    <span className="mx-2 text-[#8a8480]">→</span>
+                    <span className="text-emerald-300">+ {line.current || "(added)"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {changedLines.length > 0 && (
           <div className="border border-amber-800/50 bg-amber-950/20 rounded-[4px] overflow-hidden">

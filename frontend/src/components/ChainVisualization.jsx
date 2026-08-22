@@ -29,8 +29,11 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
   }, [recordIdentities, activeIdentityKey]);
 
   const inspectSnapshot = inspectBlock && logSnapshots[`${inspectBlock.source_system}/${inspectBlock.record_type}/${inspectBlock.record_id}`];
-  const inspectOriginal = inspectSnapshot?.original;
-  const inspectCurrent = inspectSnapshot?.current;
+  // Prefer the in-memory original/current pair (it lets us show a diff after
+  // the demo tamper), but still show the row's stored raw snapshot after a
+  // page reload when no in-memory snapshot exists.
+  const inspectOriginal = inspectSnapshot?.original ?? inspectBlock?.raw_content;
+  const inspectCurrent = inspectSnapshot?.current ?? inspectBlock?.raw_content;
   const inspectChanges = inspectOriginal !== undefined && inspectCurrent !== undefined
     ? Array.from({ length: Math.max(String(inspectOriginal).split(/\r?\n/).length, String(inspectCurrent).split(/\r?\n/).length) }, (_, index) => ({
         number: index + 1,
@@ -237,7 +240,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                         }}
                         className="flex items-center gap-1 text-[#c9793f] hover:text-[#f0ece9] uppercase"
                       >
-                        <span>Inspect forensic certificate</span>
+                        <span>Inspect log + forensic certificate</span>
                         <FiMaximize2 className="w-3 h-3" />
                       </button>
                     </div>
