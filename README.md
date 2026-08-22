@@ -1,120 +1,153 @@
-# HashLog — Tamper-Evident Audit Trail & Immutable Log
+# HashLog
 
-> **A lightweight, cryptographically-linked log where any record modification or deletion is instantly detected, precisely located, and visually exposed.**
+> **Zero-Knowledge External Integrity Ledger & Tamper-Evident Audit Trail**
+
+HashLog is a high-throughput, append-only cryptographic ledger designed to mathematically guarantee the integrity of external database records, documents, and business transactions without persisting raw sensitive data.
+
+By combining zero-knowledge content hashing with dual-lineage SHA-256 hash chains, HashLog instantly exposes any unauthorized database row modification, silent data drift, or rogue deletion with mathematical certainty.
 
 ---
 
 ## Table of Contents
-1. [Overview & Core Concept](#overview--core-concept)
-2. [The Problem: Vulnerabilities in Traditional Logging](#the-problem-vulnerabilities-in-traditional-logging)
-3. [The Solution: Cryptographic Hash Chains](#the-solution-cryptographic-hash-chains)
-4. [Mathematical & Algorithmic Foundations](#mathematical--algorithmic-foundations)
+
+1. [Core Concepts & Dual-Lineage Architecture](#core-concepts--dual-lineage-architecture)
+2. [The Problem: Vulnerabilities in Traditional Auditing](#the-problem-vulnerabilities-in-traditional-auditing)
+3. [Architectural Comparison](#architectural-comparison)
+4. [Mathematical & Cryptographic Specification](#mathematical--cryptographic-specification)
 5. [System Architecture & Tech Stack](#system-architecture--tech-stack)
 6. [API Endpoints Reference](#api-endpoints-reference)
-7. [Getting Started (Step-by-Step Setup)](#getting-started-step-by-step-setup)
+7. [Database Schema](#database-schema)
+8. [Getting Started (Step-by-Step Setup)](#getting-started-step-by-step-setup)
    - [Backend Setup (FastAPI)](#1-backend-setup-python--fastapi)
    - [Frontend Setup (React + Vite)](#2-frontend-setup-react--vite)
-8. [Demonstrating Tamper Detection](#demonstrating-tamper-detection)
-9. [Database Schema](#database-schema)
-10. [Real-World Applications & Compliance](#real-world-applications--compliance)
-11. [Project Structure & Responsibilities](#project-structure--responsibilities)
+   - [Running Automated Tests](#3-running-automated-tests)
+9. [Tamper Detection Demonstration](#tamper-detection-demonstration)
+10. [Configuration & Environment Variables](#configuration--environment-variables)
+11. [Enterprise Compliance & Use Cases](#enterprise-compliance--use-cases)
+12. [Repository Structure](#repository-structure)
 
 ---
 
-## Overview & Core Concept
+## Core Concepts & Dual-Lineage Architecture
 
-Consider a physical ledger where each page must be sealed:
-* In a regular ledger with loose leaves, someone can pull out page 3, alter numbers, or discard the page entirely without leaving an obvious trace.
-* In a **HashLog ledger**, when you create a new entry, you must generate a unique mathematical fingerprint derived from **both the new entry's content and the previous entry's fingerprint**.
+Unlike conventional logging engines that duplicate mutable application data into another table, HashLog operates strictly on cryptographic proofs:
 
-If an unauthorized party alters a single character in entry #3 after the fact, entry #3's fingerprint changes. Because entry #4 was computed using entry #3's original fingerprint, entry #4's calculation immediately fails. This cascading mismatch breaks the integrity of the chain from entry #3 onward, making silent tampering impossible.
-
----
-
-## The Problem: Vulnerabilities in Traditional Logging
-
-In standard database systems (PostgreSQL, MySQL, SQLite, MongoDB), logs and audit trails are stored as mutable rows.
+1. **Zero-Knowledge Content Ingestion**: The application hashes external payloads in memory (`content_hash`) using canonical JSON serialization. The raw payload is immediately discarded; only the proof is written to the ledger.
+2. **Dual-Lineage Cryptographic Graph**:
+   - **Global Ledger Spine (`previous_ledger_hash`)**: Every record is linked linearly to the preceding ledger entry across all systems, forming an append-only timeline starting from `GENESIS`.
+   - **Per-Record Version Chain (`previous_version_hash`)**: Entries sharing the same composite identity (`source_system`, `record_type`, `record_id`) maintain an independent version lineage ($v1 \rightarrow v2 \rightarrow v3$).
+3. **Independent Checkpoint Anchoring**: Periodically freezes ledger root hashes into point-in-time snapshot anchors for external verification or decentralized timestamping.
 
 ```
-[ Traditional Database Table ]
-Row 1: Admin created account
-Row 2: User transferred $5,000  <── Attacker or rogue admin edits this to $50
-Row 3: Backup completed
+GLOBAL LEDGER SPINE:
+[ GENESIS ] ───> [ Block #1: Invoice v1 ] ───> [ Block #2: Order v1 ] ───> [ Block #3: Invoice v2 ]
+                         │                                                        ▲
+                         └─────────────── previous_version_hash ──────────────────┘
+                                      (PER-RECORD LINEAGE DAG)
+```
+
+---
+
+## The Problem: Vulnerabilities in Traditional Auditing
+
+In standard relational and document databases (PostgreSQL, MySQL, SQLite, MongoDB), audit logs are stored as regular mutable table rows.
+
+```text
+[ Mutable Database Rows ]
+Row 1: Admin created user account
+Row 2: User transferred $5,000.00  <── Attacker or rogue DBA alters to $50.00
+Row 3: User logged out
 ```
 
 ### The Security Gap
-1. Any party with direct database access or elevated credentials can execute an `UPDATE` or `DELETE` query directly on the log table:
+1. **Silent In-Place Modification**: Any user, compromised service account, or rogue database administrator with `UPDATE` or `DELETE` permissions can alter historical records without leaving a trace:
    ```sql
-   UPDATE entries SET data = 'User transferred $50' WHERE id = 2;
+   UPDATE transactions SET amount = 50.00 WHERE id = 2;
    ```
-2. The database executes the change silently.
-3. Auditors have no mathematical way to prove whether a record was modified after its creation.
+2. **No Intrinsic Proof**: Standard relational databases cannot prove whether a historical query result reflects the exact data state written at creation time.
+3. **Compromised Log Files**: Centralized text log streams (e.g. syslog, logstash) can be truncated or modified by root attackers after an intrusion.
 
-### Comparison: Traditional DB vs. Blockchain vs. HashLog
+---
 
-| Feature | Traditional Database | Full Blockchain | HashLog |
+## Architectural Comparison
+
+| Dimension | Traditional Database | Public Blockchain | HashLog |
 | :--- | :--- | :--- | :--- |
-| **Tamper Evidence** | None (silently mutable) | High | **Instant & Mathematically Verifiable** |
-| **Latency / Performance** | High speed (<5ms) | High latency (seconds to minutes) | **High speed (<5ms)** |
-| **Cost & Infrastructure** | Low / Free | High (gas fees, distributed nodes) | **Minimal (single server or standard cluster)** |
-| **Operational Overhead** | Low | High | **Low (plug & play API)** |
-
-HashLog provides the **cryptographic integrity guarantees of a blockchain** combined with the **performance and simplicity of a standard database**.
-
----
-
-## The Solution: Cryptographic Hash Chains
-
-Every entry in HashLog is cryptographically bound to its predecessor:
-1. `prev_hash`: The SHA-256 digest of the previous record.
-2. `entry_hash`: The SHA-256 digest calculated over the current entry payload combined with `prev_hash`.
-
-```
-┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
-│    Entry #1     │       │    Entry #2     │       │    Entry #3     │
-│                 │       │                 │       │                 │
-│ prev: GENESIS   │       │ prev: 9f8a...   │       │ prev: e4c1...   │
-│ data: "Login"   │──────>│ data: "Payment" │──────>│ data: "Logout"  │
-│ hash: 9f8a...   │       │ hash: e4c1...   │       │ hash: 3a7b...   │
-└─────────────────┘       └─────────────────┘       └─────────────────┘
-```
-
-If an attacker modifies **Entry #1**, its hash recalculates to a different value. When the verifier reaches **Entry #2**, it expects the original hash of Entry #1, triggering an immediate mismatch.
+| **Tamper Evidence** | None (silently mutable) | High (consensus-backed) | **Instant & Mathematically Verifiable** |
+| **Data Privacy** | Raw data stored | Public or expensive ZK | **Zero-Knowledge (Hashes Only)** |
+| **Write Latency** | $< 5\text{ ms}$ | $2\text{ s} - 15\text{ min}$ | **$< 2\text{ ms}$** |
+| **Cost & Gas Fees** | Low | High per transaction | **Zero gas / standard infrastructure** |
+| **Storage Footprint** | Large (full payloads) | Very Large | **Minimal (32-byte hashes + metadata)** |
+| **Deployment Model** | Relational / NoSQL | Distributed Node Network | **Lightweight Microservice (Docker / Fastify / FastAPI)** |
 
 ---
 
-## Mathematical & Algorithmic Foundations
+## Mathematical & Cryptographic Specification
 
-### 1. Hash Calculation (SHA-256)
-Each entry's hash is computed using deterministic string concatenation:
+### 1. Canonical Deterministic Serialization
 
-$$\text{entry\_hash} = \text{SHA256}(\text{prev\_hash} + \text{"|"} + \text{timestamp} + \text{"|"} + \text{user\_id} + \text{"|"} + \text{data} + \text{"|"} + \text{file\_hash} + \text{"|"} + \text{nonce})$$
+To avoid hash discrepancies caused by non-deterministic key ordering or whitespace differences, all payloads undergo strict canonicalization prior to hashing:
 
-* **Genesis Entry**: The first record in the database uses `prev_hash = "GENESIS"`.
-* **Sequential Entries**: Every subsequent record sets `prev_hash` to the `entry_hash` of the immediately preceding record.
+$$\text{canonicalize}(X) = \text{JSON}(\text{ensure\_ascii}=\text{False}, \text{sort\_keys}=\text{True}, \text{separators}=(\text{","}, \text{":"}))$$
 
-### 2. Full-Chain Verification Algorithm
-Verification iterates linearly from the genesis record to the latest record:
+### 2. Content Hash Computation
+
+Given an external record payload $C$:
+
+$$\text{content\_hash} = \text{SHA-256}(\text{canonicalize}(C))$$
+
+### 3. Entry Hash Computation
+
+Each ledger block binds together both lineages, metadata, and timestamps into a unified proof:
+
+$$\text{payload} = \text{canonicalize}\begin{pmatrix}
+\text{previous\_version\_hash} \\
+\text{previous\_ledger\_hash} \\
+\text{source\_system} \\
+\text{record\_type} \\
+\text{record\_id} \\
+\text{version\_number} \\
+\text{content\_hash} \\
+\text{timestamp}
+\end{pmatrix}$$
+
+$$\text{entry\_hash} = \text{SHA-256}(\text{payload})$$
+
+* For the genesis entry: $\text{previous\_ledger\_hash} = \text{"GENESIS"}$.
+* For version 1 of any record identity: $\text{previous\_version\_hash} = \text{None}$.
+
+### 4. Full Ledger Verification Algorithm
+
+Verification performs a linear single-pass audit across the entire chain:
 
 ```text
-expected_prev = "GENESIS"
+expected_ledger_hash = "GENESIS"
+latest_version_by_identity = {}
 
-for each entry in database (ordered by ID ascending):
-    recalculated_hash = SHA256(
-        expected_prev + "|" + 
-        entry.timestamp + "|" + 
-        entry.user_id + "|" + 
-        entry.data + "|" + 
-        entry.file_hash + "|" + 
-        entry.nonce
-    )
+for each record in ledger (ordered by id ASC):
+    identity = (record.source_system, record.record_type, record.record_id)
+    prev_record = latest_version_by_identity.get(identity)
     
-    if recalculated_hash != entry.entry_hash:
-        return { valid: False, tampered_at: entry.id, message: "Tampered at entry #" + entry.id }
+    # 1. Validate global chain linkage
+    if record.previous_ledger_hash != expected_ledger_hash:
+        return FAIL(tampered_at=record.id, reason="Broken global ledger link")
         
-    expected_prev = entry.entry_hash
+    # 2. Validate per-record version continuity
+    expected_version = (prev_record.version_number + 1) if prev_record else 1
+    expected_prev_version_hash = prev_record.entry_hash if prev_record else None
+    
+    if record.version_number != expected_version or record.previous_version_hash != expected_prev_version_hash:
+        return FAIL(tampered_at=record.id, reason="Broken record version continuity")
+        
+    # 3. Recalculate and match cryptographic hash
+    recalculated_entry_hash = compute_entry_hash(record)
+    if record.entry_hash != recalculated_entry_hash:
+        return FAIL(tampered_at=record.id, reason="Cryptographic signature mismatch")
+        
+    expected_ledger_hash = recalculated_entry_hash
+    latest_version_by_identity[identity] = record
 
-return { valid: True, message: "Chain is valid" }
+return PASS(valid=True, total_records=count)
 ```
 
 ---
@@ -123,86 +156,221 @@ return { valid: True, message: "Chain is valid" }
 
 ```mermaid
 graph TD
-    Client["Client Interface (React + Vite + Tailwind CSS)"]
-    API["API Gateway (FastAPI + Uvicorn)"]
-    HashEngine["Cryptographic Engine (Python hashlib SHA-256)"]
-    DB[("Relational Database (SQLite / PostgreSQL)")]
+    Client["Client / External Enterprise Apps"]
+    WebUI["Interactive Web Console (React 18 + Vite + Tailwind CSS)"]
+    FastAPI["API Engine (FastAPI + Uvicorn)"]
+    HashUtils["Cryptographic Engine (Python hashlib SHA-256)"]
+    SQLite[("Immutable Store (SQLite WAL Mode / PostgreSQL)")]
 
-    Client -->|POST /api/entries (Append)| API
-    Client -->|GET /api/verify (Verify Integrity)| API
-    Client -->|GET /api/entries (List Chain)| API
-    API -->|Compute / Validate Hashes| HashEngine
-    API -->|Append-Only Read/Write| DB
+    Client -->|POST /api/records/register| FastAPI
+    Client -->|POST /api/records/verify| FastAPI
+    WebUI -->|HTTP / JSON API| FastAPI
+    FastAPI -->|Canonicalize & Hash| HashUtils
+    FastAPI -->|Append / Verify Rows| SQLite
 ```
 
-* **Frontend**: React (Vite), Tailwind CSS, Framer Motion (visual feedback), React Icons, Axios.
-* **Backend**: Python 3.10+, FastAPI (asynchronous ASGI framework), Uvicorn.
-* **Storage**: SQLite (`hashlog.db`) for zero-configuration local development; PostgreSQL-ready.
-* **Cryptography**: Python `hashlib` (SHA-256 standard).
+### Core Technologies
+- **Backend Service**: Python 3.10+, FastAPI (ASGI), Uvicorn, Pydantic v2.
+- **Data Persistence**: SQLite with Write-Ahead Logging (`PRAGMA journal_mode = WAL`) and row busy timeout safeguards; clean architecture ready for PostgreSQL.
+- **Frontend Studio**: React 18, Vite, Tailwind CSS, React Icons, Axios.
+- **Design System**: Luxury Veluna-inspired dark obsidian theme (`#000000`), subtle fractal noise overlay, warm copper accents (`#c9793f`), and Fraunces serif typography.
 
 ---
 
 ## API Endpoints Reference
 
-HashLog exposes auto-generated OpenAPI / Swagger documentation at `http://localhost:3000/docs`.
+Interactive OpenAPI documentation is automatically served at `http://localhost:8000/docs`.
 
-| Method | Endpoint | Description | Request Body | Response Status |
-| :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/entries` | Append a new entry to the chain | `{ "data": "...", "user_id": "optional", "file_hash": "optional" }` | `201 Created` |
-| `GET` | `/api/entries` | List log entries (paginated, latest first) | Query: `?limit=100&offset=0` | `200 OK` (List) |
-| `GET` | `/api/entries/{id}`| Fetch a specific entry by ID | None | `200 OK` / `404` |
-| `GET` | `/api/verify` | Verify entire hash chain integrity | None | `200 OK` (`VerifyResponse`) |
-| `GET` | `/api/export` | Export the complete log as JSON | None | `200 OK` |
-| `GET` | `/api/health` | Service health status and total count | None | `200 OK` |
-| `GET` | `/docs` | Interactive Swagger UI documentation | None | `200 OK` (HTML) |
+### 1. Record Ingestion & History
+
+#### `POST /api/records/register`
+Hashes one external record in memory and commits its proof to the ledger.
+- **Request Body**:
+  ```json
+  {
+    "source_system": "billing-service",
+    "record_type": "invoice",
+    "record_id": "INV-2026-001",
+    "content": {
+      "customer_id": "CUST-882",
+      "amount": 4500.00,
+      "currency": "USD",
+      "status": "APPROVED"
+    },
+    "metadata": { "region": "us-east-1", "operator": "auto-runner" }
+  }
+  ```
+- **Response** (`201 Created`):
+  ```json
+  {
+    "id": 1,
+    "source_system": "billing-service",
+    "record_type": "invoice",
+    "record_id": "INV-2026-001",
+    "version_number": 1,
+    "content_hash": "a4f8e3...",
+    "entry_hash": "3b3350...",
+    "previous_version_hash": null,
+    "previous_ledger_hash": "GENESIS",
+    "timestamp": 1787402000000,
+    "metadata": { "region": "us-east-1", "operator": "auto-runner" },
+    "created_at": "2026-08-22T12:00:00"
+  }
+  ```
+
+#### `POST /api/records/import`
+Batch ingestion endpoint for committing multiple records in an atomic transaction.
+- **Request Body**:
+  ```json
+  {
+    "source_system": "inventory-db",
+    "record_type": "stock-level",
+    "records": [
+      { "record_id": "SKU-100", "content": { "qty": 450 } },
+      { "record_id": "SKU-101", "content": { "qty": 120 } }
+    ]
+  }
+  ```
+
+#### `GET /api/records`
+Lists persisted proofs with optional filtering by `source_system` or `record_type`.
+
+#### `GET /api/records/history`
+Fetches the complete immutable version lineage ($v1 \rightarrow v2 \rightarrow v3$) for a specific record identity (`source_system`, `record_type`, `record_id`).
+
+---
+
+### 2. Forensic Auditing & Verification
+
+#### `POST /api/records/verify`
+Validates whether live external record content matches the latest trusted on-chain proof.
+- **Request Body**:
+  ```json
+  {
+    "source_system": "billing-service",
+    "record_type": "invoice",
+    "record_id": "INV-2026-001",
+    "content": { "customer_id": "CUST-882", "amount": 4500.00, "currency": "USD", "status": "APPROVED" }
+  }
+  ```
+- **Response** (`200 OK`):
+  ```json
+  {
+    "valid": true,
+    "source_system": "billing-service",
+    "record_type": "invoice",
+    "record_id": "INV-2026-001",
+    "latest_version": 1,
+    "expected_hash": "a4f8e3...",
+    "actual_hash": "a4f8e3...",
+    "message": "External record matches the latest registered version"
+  }
+  ```
+
+#### `GET /api/ledger/verify`
+Traverses and cryptographically recomputes the entire global ledger and every version sub-chain from Genesis to tip.
+
+---
+
+### 3. Checkpoints & State Anchoring
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/checkpoints` | Create a snapshot anchor of the current ledger root hash |
+| `GET` | `/api/checkpoints` | List all historical checkpoint anchors |
+| `GET` | `/api/checkpoints/{id}/verify` | Cryptographically verify all records covered by a specific checkpoint |
+| `GET` | `/api/export` | Export all ledger proofs as a chronological JSON array |
+| `GET` | `/api/health` | Service health status and total proof count |
+
+---
+
+## Database Schema
+
+HashLog manages two append-only relational tables in SQLite (`backend/hashlog.db`):
+
+```sql
+-- Proof Ledger Table
+CREATE TABLE IF NOT EXISTS hash_records (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_system         TEXT NOT NULL,
+    record_type           TEXT NOT NULL,
+    record_id             TEXT NOT NULL,
+    version_number        INTEGER NOT NULL,
+    content_hash          TEXT NOT NULL,
+    entry_hash            TEXT NOT NULL,
+    previous_version_hash TEXT,
+    previous_ledger_hash  TEXT NOT NULL,
+    timestamp             INTEGER NOT NULL,
+    metadata              TEXT,
+    created_at            TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(source_system, record_type, record_id, version_number)
+);
+
+-- State Snapshot Anchors Table
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    last_record_id        INTEGER NOT NULL,
+    ledger_hash           TEXT NOT NULL,
+    created_at            TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Performance & Lineage Indexes
+CREATE INDEX IF NOT EXISTS idx_hash_records_identity 
+    ON hash_records(source_system, record_type, record_id, version_number);
+CREATE INDEX IF NOT EXISTS idx_hash_records_content_hash 
+    ON hash_records(content_hash);
+CREATE INDEX IF NOT EXISTS idx_hash_records_ledger_hash 
+    ON hash_records(previous_ledger_hash);
+```
 
 ---
 
 ## Getting Started (Step-by-Step Setup)
 
-### System Requirements
-* Python 3.10 or newer
-* Node.js 18 or newer (with `npm`)
+### System Prerequisites
+- **Python**: Version 3.10, 3.11, 3.12, 3.13, or 3.14
+- **Node.js**: Version 18+ (with `npm`)
 
 ---
 
 ### 1. Backend Setup (Python + FastAPI)
 
-1. Navigate to the `backend/` directory:
+1. Open a terminal and navigate to the `backend/` directory:
    ```bash
    cd backend
    ```
 
 2. Create and activate a Python virtual environment:
-   * **Linux / macOS:**
+   - **Linux / macOS:**
      ```bash
-     python3 -m venv .venv
-     source .venv/bin/activate
+     python3 -m venv venv
+     source venv/bin/activate
      ```
-   * **Windows (PowerShell):**
+   - **Windows (PowerShell):**
      ```powershell
-     python -m venv .venv
-     .\.venv\Scripts\Activate.ps1
+     python -m venv venv
+     .\venv\Scripts\Activate.ps1
      ```
 
-3. Install backend dependencies:
+3. Install required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Start the backend server:
+4. Launch the FastAPI server:
    ```bash
-   uvicorn main:app --reload --port 3000
+   uvicorn main:app --reload --port 8000
    ```
-   * API Base URL: `http://localhost:3000`
-   * Interactive API Documentation: `http://localhost:3000/docs`
-   * Health Check: `http://localhost:3000/api/health`
+
+- API Base URL: `http://localhost:8000`
+- Swagger UI Documentation: `http://localhost:8000/docs`
+- Health Check: `http://localhost:8000/api/health`
 
 ---
 
 ### 2. Frontend Setup (React + Vite)
 
-1. Open a separate terminal window and navigate to `frontend/`:
+1. In a new terminal window, navigate to `frontend/`:
    ```bash
    cd frontend
    ```
@@ -212,92 +380,129 @@ HashLog exposes auto-generated OpenAPI / Swagger documentation at `http://localh
    npm install
    ```
 
-3. Launch the development server:
+3. Start the Vite development server:
    ```bash
    npm run dev
    ```
 
-4. Open `http://localhost:5173` in your browser.
+4. Open `http://localhost:5173` in your web browser.
 
 ---
 
-## Demonstrating Tamper Detection
+### 3. Running Automated Tests
 
-Follow these steps to demonstrate HashLog's cryptographic validation:
+To execute the backend test suite covering canonical hashing, duplicate version prevention, rate limiting, and tamper detection:
 
-### Step 1: Create Valid Entries
-1. Access the web interface at `http://localhost:5173`.
-2. Add three separate entries:
-   * Entry 1: `"User Alice generated invoice #1001"`
-   * Entry 2: `"Payment of $500 received for invoice #1001"`
-   * Entry 3: `"Invoice #1001 marked as paid"`
-3. Click **"Verify Chain"**.
-   * The status badge displays **"Chain Valid"** in green.
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest -v
+```
 
 ---
 
-### Step 2: Simulate Direct Database Modification
-Simulate an attacker directly updating record #2 in the SQLite database:
+## Tamper Detection Demonstration
+
+You can test HashLog's forensic tamper detection in three steps:
+
+### Step 1: Ingest Initial Proofs
+1. Open the web interface at `http://localhost:5173`.
+2. Register two test records via the **Proof Ingestion Terminal** (`INV-001` and `INV-002`).
+3. Click **Verify Ledger** — observe the green `Synchronized` indicator.
+
+### Step 2: Simulate Direct Database Corruption
+Simulate an attacker directly modifying the database file using Python:
 
 ```bash
 cd backend
 python -c "
 import sqlite3
 conn = sqlite3.connect('hashlog.db')
-conn.execute(\"UPDATE entries SET data = 'Payment of $50 received for invoice #1001' WHERE id = 2\")
+conn.execute(\"UPDATE hash_records SET content_hash = '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08' WHERE id = 1\")
 conn.commit()
 conn.close()
-print('Simulated direct database modification on record #2.')
+print('Corrupted record #1 content hash in SQLite.')
 "
 ```
 
+### Step 3: Trigger Cryptographic Audit
+1. Return to the web console or invoke `GET /api/ledger/verify`.
+2. The verification engine immediately flags the integrity breach:
+   ```json
+   {
+     "valid": false,
+     "tampered_at": 1,
+     "total_records": 2,
+     "message": "Ledger tampering detected at record #1"
+   }
+   ```
+3. The visual graph highlights the fracture in red, illustrating the downstream hash chain break.
+
 ---
 
-### Step 3: Trigger Real-Time Verification
-1. Return to the frontend interface and click **"Verify Chain"**.
-2. **Outcome**:
-   * The system immediately detects the inconsistency.
-   * The status changes to **"Tampered at Entry #2"**.
-   * Entry card #2 is highlighted with a red warning state.
-   * The subsequent link in the visual chain is flagged as broken.
+## Configuration & Environment Variables
+
+HashLog supports environment variable configuration via `.env` or system environment:
+
+| Variable | Default Value | Description |
+| :--- | :--- | :--- |
+| `HASHLOG_DB_PATH` | `hashlog.db` | Path to the SQLite database file |
+| `HASHLOG_API_KEY` | `None` (Disabled) | Secret token required in `X-API-Key` header |
+| `HASHLOG_RATE_LIMIT_PER_MINUTE` | `120` | Maximum requests per minute per IP address |
+| `HASHLOG_CORS_ORIGINS` | `*` | Comma-separated list of allowed CORS origins |
 
 ---
 
-## Database Schema
+## Enterprise Compliance & Use Cases
 
-HashLog is designed around an append-only relational table:
+- **SOC 2 & ISO 27001**: Provides verifiable evidence of log immutability and administrative change control.
+- **HIPAA & Healthcare Audit Trails**: Mathematically proves electronic health records (EHR) have not been altered post-signature.
+- **Financial Ledgers (SOX 404)**: Ensures invoice, transaction, and journal entries cannot be silently edited.
+- **Legal Chain of Custody**: Cryptographically anchors evidence timestamps and digital artifact integrity.
+- **Database Drift Detection**: Periodically validates external ERP/CRM databases against their original registered hash proofs.
 
-```sql
-CREATE TABLE entries (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id       TEXT,
-    data          TEXT NOT NULL,
-    file_hash     TEXT,
-    timestamp     INTEGER NOT NULL,
-    prev_hash     TEXT NOT NULL,
-    entry_hash    TEXT NOT NULL,
-    nonce         INTEGER DEFAULT 0,
-    metadata      TEXT,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+---
 
-CREATE INDEX idx_entry_hash ON entries(entry_hash);
-CREATE INDEX idx_prev_hash ON entries(prev_hash);
+## Repository Structure
+
+```text
+HashLog/
+├── backend/
+│   ├── config.py             # Environment configuration & path resolvers
+│   ├── database.py           # SQLite connection pool, schema init, & WAL mode
+│   ├── hash_utils.py         # Canonical JSON serialization & SHA-256 helpers
+│   ├── main.py               # FastAPI application routes & verification engine
+│   ├── models.py             # Pydantic v2 request/response schemas
+│   ├── requirements.txt      # Production dependencies (FastAPI, uvicorn)
+│   ├── requirements-dev.txt  # Testing dependencies (pytest, httpx)
+│   └── tests/
+│       └── test_hashlog.py   # Comprehensive automated test suite
+├── frontend/
+│   ├── index.html            # HTML entry point with Fraunces & DM Sans typography
+│   ├── package.json          # Node dependencies & Vite scripts
+│   ├── tailwind.config.js    # Custom typography & copper color palette
+│   └── src/
+│       ├── App.jsx           # Master application container & state router
+│       ├── api.js            # API client with SHA-256 fallback simulation
+│       ├── index.css         # Noise texture, custom scrollbars, & animations
+│       └── components/
+│           ├── Header.jsx             # Navigation bar with live heartbeat & JSON export
+│           ├── Hero.jsx               # Editorial headline & connected node visualizer
+│           ├── StatsBar.jsx           # Linked telemetry busbar & system overview
+│           ├── ChainVisualization.jsx # Dual-lineage graph with connected blockchain flow
+│           ├── TamperLab.jsx          # Interactive mutation simulator & hex diff
+│           ├── AddEntry.jsx           # Single & batch proof ingestion terminal
+│           ├── VerifyRecord.jsx       # External content drift verification studio
+│           ├── CheckpointButton.jsx   # Point-in-time state snapshot manager
+│           ├── EntryList.jsx          # Filterable & searchable immutable proof vault
+│           ├── EntryCard.jsx          # Individual proof card with copyable digests
+│           └── StatusBar.jsx          # Footer telemetry & active node heartbeat
+└── README.md                 # Master project documentation
 ```
 
 ---
 
-## Real-World Applications & Compliance
+## License
 
-* **Regulatory Compliance**: Satisfies audit logging standards for SOX, HIPAA, GDPR, and ISO 27001.
-* **Security & SIEM**: Prevents malicious actors or rootkit compromises from erasing security event history.
-* **Legal Chain of Custody**: Provides mathematical proof that evidentiary records remain unaltered.
-* **Supply Chain & Cold Chain**: Guarantees authenticity of transit, transfer, and sensor readings.
+This project is open source and available under the [MIT License](LICENSE).
 
----
-
-## Project Structure & Responsibilities
-
-* **`frontend/`**: React user interface, chain visualization, and client-side state management.
-* **`backend/`**: FastAPI service, SHA-256 cryptographic engine, and SQLite database connector.
-* **`README.md`**: Master system documentation and execution guide.
