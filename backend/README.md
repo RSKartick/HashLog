@@ -29,6 +29,8 @@ GET  /api/ledger/verify                 Verify global and version chains
 POST /api/checkpoints                   Create a ledger checkpoint
 GET  /api/checkpoints                   List checkpoints
 GET  /api/checkpoints/{id}/verify       Verify a checkpoint
+GET  /api/checkpoints/{id}/anchor       Download a signed external anchor
+GET  /api/audit/certificate             Download a signed audit certificate
 GET  /api/export                        Export hashes only
 GET  /api/health                        Check service status
 ```

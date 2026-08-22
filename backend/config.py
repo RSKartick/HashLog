@@ -36,3 +36,8 @@ def tamper_test_enabled() -> bool:
         "yes",
         "on",
     }
+
+
+def signing_secret() -> str:
+    """Secret used to sign downloadable audit certificates and anchors."""
+    return os.getenv("HASHLOG_SIGNING_SECRET", "hashlog-local-demo-signing-secret")

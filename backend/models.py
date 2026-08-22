@@ -143,6 +143,30 @@ class CheckpointVerifyResponse(BaseModel):
     message: str
 
 
+class AuditCertificateResponse(BaseModel):
+    """Signed, hash-only audit result suitable for external evidence."""
+
+    certificate_type: str
+    issued_at: int
+    ledger_valid: bool
+    total_records: int
+    tampered_at: int | None
+    ledger_root: str
+    signature: str
+
+
+class CheckpointAnchorResponse(BaseModel):
+    """Signed checkpoint that can be downloaded and stored outside HashLog."""
+
+    anchor_type: str
+    checkpoint_id: int
+    last_record_id: int
+    ledger_hash: str
+    created_at: str | None
+    anchored_at: int
+    signature: str
+
+
 class HealthResponse(BaseModel):
     """Basic service and ledger status."""
 

@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { FiShield, FiSearch, FiCheckCircle, FiAlertTriangle, FiCpu, FiHash, FiRefreshCw, FiCheck, FiActivity } from "react-icons/fi";
-import { verifyRecord, verifyLedger } from "../api.js";
+import { verifyRecord, verifyLedger, getAuditCertificate } from "../api.js";
 
-export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading }) {
+export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading, onMessage }) {
   const [sourceSystem, setSourceSystem] = useState("");
   const [recordType, setRecordType] = useState("");
   const [recordId, setRecordId] = useState("");
@@ -11,6 +11,22 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
   const [recordError, setRecordError] = useState(null);
   const [recordLoading, setRecordLoading] = useState(false);
   const fileInputRef = useRef(null);
+
+  const downloadCertificate = async () => {
+    try {
+      const certificate = await getAuditCertificate();
+      const blob = new Blob([JSON.stringify(certificate, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `hashlog-audit-certificate-${Date.now()}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      onMessage?.("Signed audit certificate downloaded");
+    } catch (error) {
+      onMessage?.(error?.response?.data?.detail || "Could not create audit certificate");
+    }
+  };
 
   const handleFileSelect = (event) => {
     const file = event.target.files?.[0];
@@ -131,6 +147,12 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
               <FiShield className="w-4 h-4" />
             )}
             <span>Execute Full Ledger Audit</span>
+          </button>
+          <button
+            onClick={downloadCertificate}
+            className="w-full flex items-center justify-center gap-2 font-mono text-xs uppercase tracking-wider text-[#c9793f] hover:text-[#f0ece9] border border-[#3a2a20] py-2.5 rounded-[4px] transition-all"
+          >
+            Download signed audit certificate
           </button>
         </div>
 

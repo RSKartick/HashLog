@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { FiCpu, FiPlus, FiCheckCircle, FiAlertTriangle, FiCheck, FiCopy, FiClock, FiLock, FiShield } from "react-icons/fi";
-import { createCheckpoint, listCheckpoints, verifyCheckpoint } from "../api.js";
+import { createCheckpoint, listCheckpoints, verifyCheckpoint, getCheckpointAnchor } from "../api.js";
 
 export default function CheckpointButton({ onCheckpointAdded }) {
   const [checkpoints, setCheckpoints] = useState([]);
@@ -54,6 +54,21 @@ export default function CheckpointButton({ onCheckpointAdded }) {
     navigator.clipboard.writeText(hash);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const downloadAnchor = async (id) => {
+    try {
+      const anchor = await getCheckpointAnchor(id);
+      const blob = new Blob([JSON.stringify(anchor, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `hashlog-checkpoint-${id}-anchor.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // The checkpoint remains visible even if the anchor download fails.
+    }
   };
 
   return (
@@ -136,6 +151,9 @@ export default function CheckpointButton({ onCheckpointAdded }) {
                 </div>
 
                 <div className="pt-3 border-t border-[#1f1f1f]">
+                  <button onClick={() => downloadAnchor(cp.id)} className="w-full mb-2 flex items-center justify-center gap-1.5 font-mono text-xs text-[#c9793f] hover:text-[#f0ece9] bg-[#111111] border border-[#242424] py-2 rounded-[4px]">
+                    <FiShield className="w-3 h-3" /> Download independent anchor
+                  </button>
                   {vResult ? (
                     <div
                       className={`p-2.5 rounded-[4px] border text-[11px] font-mono flex items-center gap-2 ${

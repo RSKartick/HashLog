@@ -145,3 +145,18 @@ def test_import_hashes_batch_without_returning_content(client: TestClient):
     body = response.json()
     assert body["imported_count"] == 2
     assert all("content" not in item for item in body["records"])
+
+
+def test_signed_certificate_and_external_checkpoint_anchor(client: TestClient):
+    register(client, {"message": "certificate"})
+    certificate = client.get("/api/audit/certificate")
+    assert certificate.status_code == 200
+    assert certificate.json()["ledger_valid"] is True
+    assert len(certificate.json()["signature"]) == 64
+
+    checkpoint = client.post("/api/checkpoints")
+    assert checkpoint.status_code == 201
+    anchor = client.get(f"/api/checkpoints/{checkpoint.json()['id']}/anchor")
+    assert anchor.status_code == 200
+    assert anchor.json()["ledger_hash"] == checkpoint.json()["ledger_hash"]
+    assert len(anchor.json()["signature"]) == 64

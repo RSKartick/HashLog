@@ -177,6 +177,7 @@ export default function App() {
           onRunFullVerify={handleVerifyLedger}
           ledgerResult={verifyResult}
           ledgerLoading={loading.verify}
+          onMessage={showToast}
         />
 
         <TamperLab

@@ -33,6 +33,7 @@ venv.bak/
 
 # Testing & Linting
 .pytest_cache/
+.tmp/
 .coverage
 .coverage.*
 nosetests.xml

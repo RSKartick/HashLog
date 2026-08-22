@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import secrets
 import sqlite3
 import time
@@ -21,7 +23,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from .config import api_key, cors_origins, rate_limit_per_minute, tamper_test_enabled
+    from .config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled
     from .database import db_session, init_db
     from .hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from .models import (
@@ -37,9 +39,11 @@ try:
         RecordVerifyResponse,
         TamperTestRequest,
         TamperTestResponse,
+        AuditCertificateResponse,
+        CheckpointAnchorResponse,
     )
 except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend/.
-    from config import api_key, cors_origins, rate_limit_per_minute, tamper_test_enabled
+    from config import api_key, cors_origins, rate_limit_per_minute, signing_secret, tamper_test_enabled
     from database import db_session, init_db
     from hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from models import (
@@ -55,6 +59,8 @@ except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend
         RecordVerifyResponse,
         TamperTestRequest,
         TamperTestResponse,
+        AuditCertificateResponse,
+        CheckpointAnchorResponse,
     )
 
 
@@ -119,6 +125,11 @@ def _parse_metadata(value: str | None) -> dict[str, Any] | None:
     except (TypeError, json.JSONDecodeError):
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _sign_payload(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hmac.new(signing_secret().encode("utf-8"), canonical.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _response_from_row(row: sqlite3.Row) -> HashRecordResponse:
@@ -528,6 +539,44 @@ def export_ledger() -> list[HashRecordResponse]:
     with db_session() as connection:
         rows = connection.execute("SELECT * FROM hash_records ORDER BY id ASC").fetchall()
     return [_response_with_entry_hash(row) for row in rows]
+
+
+@app.get("/api/audit/certificate", response_model=AuditCertificateResponse)
+def audit_certificate() -> AuditCertificateResponse:
+    """Create a signed, hash-only audit certificate for external evidence."""
+    with db_session() as connection:
+        rows = connection.execute("SELECT * FROM hash_records ORDER BY id ASC").fetchall()
+        checkpoints = connection.execute("SELECT id FROM checkpoints ORDER BY id ASC").fetchall()
+    result = _verify_ledger_rows(rows)
+    payload = {
+        "certificate_type": "HASHLOG_AUDIT_CERTIFICATE_V1",
+        "issued_at": int(time.time()),
+        "ledger_valid": result.valid,
+        "total_records": result.total_records,
+        "tampered_at": result.tampered_at,
+        "ledger_root": rows[-1]["entry_hash"] if rows else GENESIS_HASH,
+    }
+    return AuditCertificateResponse(**payload, signature=_sign_payload(payload))
+
+
+@app.get("/api/checkpoints/{checkpoint_id}/anchor", response_model=CheckpointAnchorResponse)
+def download_checkpoint_anchor(checkpoint_id: int) -> CheckpointAnchorResponse:
+    """Return a signed checkpoint for storage in an independent system."""
+    with db_session() as connection:
+        checkpoint = connection.execute(
+            "SELECT * FROM checkpoints WHERE id = ?", (checkpoint_id,)
+        ).fetchone()
+    if checkpoint is None:
+        raise HTTPException(status_code=404, detail="Checkpoint not found")
+    payload = {
+        "anchor_type": "HASHLOG_CHECKPOINT_ANCHOR_V1",
+        "checkpoint_id": checkpoint["id"],
+        "last_record_id": checkpoint["last_record_id"],
+        "ledger_hash": checkpoint["ledger_hash"],
+        "created_at": checkpoint["created_at"],
+        "anchored_at": int(time.time()),
+    }
+    return CheckpointAnchorResponse(**payload, signature=_sign_payload(payload))
 
 
 @app.get("/api/health", response_model=HealthResponse)

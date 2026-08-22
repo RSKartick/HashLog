@@ -89,6 +89,16 @@ export async function verifyCheckpoint(checkpointId) {
   return data;
 }
 
+export async function getCheckpointAnchor(checkpointId) {
+  const { data } = await api.get(`/checkpoints/${checkpointId}/anchor`);
+  return data;
+}
+
+export async function getAuditCertificate() {
+  const { data } = await api.get("/audit/certificate");
+  return data;
+}
+
 // ---------- Export ----------
 
 export async function exportLedger() {
