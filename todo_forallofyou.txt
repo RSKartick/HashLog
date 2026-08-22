@@ -1,0 +1,54 @@
+Person 1 — Frontend setup
+Build the React + Vite frontend inside frontend/.
+Create the basic dark HashLog layout with:
+- Header
+- Add Entry form
+- Entries list placeholder
+- Verify button
+- Verification result panel
+Do not build the backend or edit anything inside backend/. Use mock data for now. Keep the components modular.
+
+Person 2 — Frontend API integration
+Create frontend/src/api.js for connecting to the FastAPI backend.
+Add functions for:
+- createEntry()
+- getEntries()
+- getEntry()
+- verifyChain()
+- healthCheck()
+Use the API routes from the project brief. Do not edit backend files. If the backend is not ready, use the expected response shapes from the brief.
+
+Person 3 — Testing and tamper demo
+Create backend tests inside backend/tests/.
+Test:
+- Creating a valid entry
+- Linking entries with prev_hash
+- Detecting modified data
+- Rejecting empty data
+- Returning the correct verification response
+Do not change the backend implementation unless you find a bug. Report failures clearly.
+
+Person 4 — Documentation and demo preparation
+Improve the project documentation.
+Document:
+- How the hash chain works
+- How to run the backend
+- How to run the frontend
+- API endpoints
+- How to demonstrate tampering
+Only edit README.md files and documentation files.
+
+Our work
+I will continue building the backend in this order:
+1. Database layer — complete
+2. Hashing module — next
+3. Pydantic models
+4. API endpoints
+5. Verification logic
+6. Automated tests
+7. Frontend integration support
+Tell everyone to work in separate branches if you are using Git:
+git checkout -b frontend-layout
+or:
+git checkout -b backend-tests
+The most important rule is: frontend people work inside frontend/, backend people work inside backend/, and documentation people work on README files. This lets everyone work at the same time without overwriting each other.
