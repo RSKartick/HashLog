@@ -21,7 +21,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from .config import api_key, cors_origins, rate_limit_per_minute
+    from .config import api_key, cors_origins, rate_limit_per_minute, tamper_test_enabled
     from .database import db_session, init_db
     from .hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from .models import (
@@ -35,9 +35,11 @@ try:
         RecordRegister,
         RecordVerifyRequest,
         RecordVerifyResponse,
+        TamperTestRequest,
+        TamperTestResponse,
     )
 except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend/.
-    from config import api_key, cors_origins, rate_limit_per_minute
+    from config import api_key, cors_origins, rate_limit_per_minute, tamper_test_enabled
     from database import db_session, init_db
     from hash_utils import GENESIS_HASH, compute_content_hash, compute_entry_hash
     from models import (
@@ -51,10 +53,13 @@ except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend
         RecordRegister,
         RecordVerifyRequest,
         RecordVerifyResponse,
+        TamperTestRequest,
+        TamperTestResponse,
     )
 
 
 _rate_limit_hits: dict[str, list[float]] = {}
+_tamper_backups: dict[int, tuple[str, str]] = {}
 
 
 def require_api_key(
@@ -392,6 +397,70 @@ def verify_ledger() -> LedgerVerifyResponse:
     with db_session() as connection:
         rows = connection.execute("SELECT * FROM hash_records ORDER BY id ASC").fetchall()
     return _verify_ledger_rows(rows)
+
+
+@app.post("/api/dev/tamper", response_model=TamperTestResponse)
+def simulate_tamper(request: TamperTestRequest) -> TamperTestResponse:
+    """Intentionally corrupt one stored hash for a local demonstration."""
+    if not tamper_test_enabled():
+        raise HTTPException(
+            status_code=403,
+            detail="Tamper simulation is disabled. Set HASHLOG_ENABLE_TAMPER_TEST=true for local testing.",
+        )
+
+    with db_session() as connection:
+        row = connection.execute(
+            "SELECT id FROM hash_records WHERE id = ?", (request.record_db_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Hash record not found")
+        original = connection.execute(
+            "SELECT content_hash, entry_hash FROM hash_records WHERE id = ?",
+            (request.record_db_id,),
+        ).fetchone()
+        if request.record_db_id not in _tamper_backups:
+            _tamper_backups[request.record_db_id] = (
+                original["content_hash"],
+                original["entry_hash"],
+            )
+        connection.execute(
+            "UPDATE hash_records SET content_hash = ? WHERE id = ?",
+            ("0" * 64, request.record_db_id),
+        )
+        connection.commit()
+
+    return TamperTestResponse(
+        record_db_id=request.record_db_id,
+        changed_field="content_hash",
+        message="Test tamper applied. Run the full ledger audit to detect it.",
+    )
+
+
+@app.post("/api/dev/tamper/revert", response_model=TamperTestResponse)
+def revert_tamper(request: TamperTestRequest) -> TamperTestResponse:
+    """Restore a proof changed by the current Tamper Lab session."""
+    if not tamper_test_enabled():
+        raise HTTPException(status_code=403, detail="Tamper simulation is disabled")
+    backup = _tamper_backups.get(request.record_db_id)
+    if backup is None:
+        raise HTTPException(status_code=404, detail="No temporary tamper backup exists for this proof")
+    with db_session() as connection:
+        row = connection.execute(
+            "SELECT id FROM hash_records WHERE id = ?", (request.record_db_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Hash record not found")
+        connection.execute(
+            "UPDATE hash_records SET content_hash = ?, entry_hash = ? WHERE id = ?",
+            (backup[0], backup[1], request.record_db_id),
+        )
+        connection.commit()
+    _tamper_backups.pop(request.record_db_id, None)
+    return TamperTestResponse(
+        record_db_id=request.record_db_id,
+        changed_field="content_hash, entry_hash",
+        message="Original proof restored. Run the full ledger audit to confirm.",
+    )
 
 
 @app.post("/api/checkpoints", response_model=CheckpointResponse, status_code=201)

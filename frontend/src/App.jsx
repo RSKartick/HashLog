@@ -8,6 +8,7 @@ import VerifyRecord from "./components/VerifyRecord.jsx";
 import CheckpointButton from "./components/CheckpointButton.jsx";
 import EntryList from "./components/EntryList.jsx";
 import StatusBar from "./components/StatusBar.jsx";
+import TamperLab from "./components/TamperLab.jsx";
 import {
   listRecords,
   registerRecord,
@@ -78,7 +79,7 @@ export default function App() {
       await fetchRecords();
       setVerifyResult(null);
       setTamperedIds(new Set());
-      showToast(`Batch of ${batchItems.length} records imported`);
+      showToast(`File proof registered: ${batchItems[0]?.record_id || "uploaded log"}`);
     } catch (err) {
       showToast(err?.response?.data?.detail || "Batch import failed");
     } finally {
@@ -128,6 +129,11 @@ export default function App() {
     }
   };
 
+  const handleTamperApplied = async () => {
+    await fetchRecords();
+    await handleVerifyLedger();
+  };
+
   const latestHash = records.length > 0 ? records[records.length - 1].entry_hash : null;
 
   return (
@@ -171,6 +177,12 @@ export default function App() {
           onRunFullVerify={handleVerifyLedger}
           ledgerResult={verifyResult}
           ledgerLoading={loading.verify}
+        />
+
+        <TamperLab
+          records={records}
+          onTamperApplied={handleTamperApplied}
+          onMessage={showToast}
         />
 
         <CheckpointButton

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FiShield, FiSearch, FiCheckCircle, FiAlertTriangle, FiCpu, FiHash, FiRefreshCw, FiCheck, FiActivity } from "react-icons/fi";
 import { verifyRecord, verifyLedger } from "../api.js";
 
@@ -10,6 +10,23 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
   const [recordResult, setRecordResult] = useState(null);
   const [recordError, setRecordError] = useState(null);
   const [recordLoading, setRecordLoading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      setContent(String(loadEvent.target?.result ?? ""));
+      // The filename is the identity used by file registration. Always use
+      // the selected filename, including its extension, for verification.
+      setRecordId(file.name);
+      setRecordError(null);
+      setRecordResult(null);
+    };
+    reader.onerror = () => setRecordError("Could not read the selected file");
+    reader.readAsText(file);
+  };
 
   const handleVerifyRecord = async (e) => {
     e.preventDefault();
@@ -127,7 +144,7 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
               </span>
             </div>
             <span className="font-mono text-[9px] text-[#8a8480] bg-[#111111] px-2 py-0.5 rounded border border-[#242424]">
-              ZERO-KNOWLEDGE
+              HASH-ONLY CHECK
             </span>
           </div>
 
@@ -165,15 +182,38 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
               </div>
             </div>
 
+            {recordId && (
+              <div className="font-mono text-[10px] text-[#8a8480]">
+                Verifying file identity: <span className="text-[#c9793f]">{recordId}</span>
+              </div>
+            )}
+
             <div>
-              <label className="block font-mono text-[9px] text-[#8a8480] uppercase mb-1">
-                Current External Record Payload to Test:
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block font-mono text-[9px] text-[#8a8480] uppercase">
+                  Current External Record or File to Test:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="font-mono text-[9px] uppercase text-[#c9793f] hover:text-[#f0ece9]"
+                >
+                  Choose file
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.json,.txt,.log"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </div>
               <textarea
                 required
                 rows={3}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                placeholder="Paste the current record, or choose the edited file above"
                 className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[4px] p-3 font-mono text-xs text-[#f0ece9] focus:outline-none resize-none"
               />
             </div>

@@ -26,3 +26,13 @@ def rate_limit_per_minute() -> int:
         return max(1, int(os.getenv("HASHLOG_RATE_LIMIT_PER_MINUTE", "120")))
     except ValueError:
         return 120
+
+
+def tamper_test_enabled() -> bool:
+    """Allow the local development-only tamper simulator by default."""
+    return os.getenv("HASHLOG_ENABLE_TAMPER_TEST", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }

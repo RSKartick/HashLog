@@ -107,6 +107,22 @@ class LedgerVerifyResponse(BaseModel):
     message: str
 
 
+class TamperTestRequest(BaseModel):
+    """Select a stored proof to intentionally corrupt during local testing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    record_db_id: int = Field(..., ge=1)
+
+
+class TamperTestResponse(BaseModel):
+    """Result of the development-only tamper simulation."""
+
+    record_db_id: int
+    changed_field: str
+    message: str
+
+
 class CheckpointResponse(BaseModel):
     """A point-in-time ledger root suitable for independent anchoring."""
 

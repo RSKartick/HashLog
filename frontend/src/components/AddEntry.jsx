@@ -13,6 +13,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
 
   // Batch import state
   const [file, setFile] = useState(null);
+  const [batchRawContent, setBatchRawContent] = useState("");
   const [batchParsed, setBatchParsed] = useState(null);
   const [batchError, setBatchError] = useState(null);
   const [batchSource, setBatchSource] = useState("");
@@ -67,6 +68,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
     reader.onload = (e) => {
       try {
         const text = e.target.result;
+        setBatchRawContent(text);
         let records = [];
 
         if (f.name.endsWith(".json")) {
@@ -106,9 +108,23 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
     onBatchSubmit({
       source_system: batchSource.trim(),
       record_type: batchType.trim(),
-      records: batchParsed,
+      // The uploaded file is one external log artifact. Rows are preview-only;
+      // hash the exact file content once instead of creating row proofs.
+      records: [
+        {
+          record_id: file.name,
+          content: batchRawContent,
+          metadata: {
+            filename: file.name,
+            format: file.name.split(".").pop()?.toLowerCase() || "unknown",
+            size_bytes: file.size,
+            preview_rows: batchParsed.length,
+          },
+        },
+      ],
     });
     setFile(null);
+    setBatchRawContent("");
     setBatchParsed(null);
   };
 
@@ -306,6 +322,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
                   type="button"
                   onClick={() => {
                     setFile(null);
+                    setBatchRawContent("");
                     setBatchParsed(null);
                   }}
                   className="p-1 rounded bg-[#161616] text-[#8a8480] hover:text-[#f0ece9]"
@@ -345,7 +362,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
 
                   <div className="bg-[#050505] border border-[#1f1f1f] rounded-[4px] p-3">
                     <span className="font-mono text-[10px] text-[#8a8480] uppercase block mb-2">
-                      Parsed {batchParsed.length} records ready for batch ingestion:
+                      Parsed {batchParsed.length} rows. The complete file will be stored as one proof:
                     </span>
                     <div className="space-y-1 max-h-32 overflow-y-auto font-mono text-[10px] text-[#b8b2ae]">
                       {batchParsed.slice(0, 4).map((rec, i) => (
@@ -371,7 +388,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
                     ) : (
                       <FiCheck className="w-4 h-4" />
                     )}
-                    <span>Commit Batch ({batchParsed.length} Proofs)</span>
+                    <span>Commit File Proof (1)</span>
                   </button>
                 </div>
               )}

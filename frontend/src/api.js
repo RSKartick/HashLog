@@ -52,6 +52,16 @@ export async function verifyLedger() {
   return data;
 }
 
+export async function simulateTamper(recordDbId) {
+  const { data } = await api.post("/dev/tamper", { record_db_id: recordDbId });
+  return data;
+}
+
+export async function revertTamper(recordDbId) {
+  const { data } = await api.post("/dev/tamper/revert", { record_db_id: recordDbId });
+  return data;
+}
+
 export async function verifyRecord({ source_system, record_type, record_id, content }) {
   const { data } = await api.post("/records/verify", {
     source_system,

@@ -108,6 +108,27 @@ def test_ledger_tampering_is_detected(client: TestClient):
     assert response.json()["tampered_at"] == 1
 
 
+def test_tamper_lab_endpoint_corrupts_a_proof_only_when_enabled(client, monkeypatch):
+    record = register(client, {"message": "original"})
+
+    monkeypatch.setenv("HASHLOG_ENABLE_TAMPER_TEST", "false")
+    disabled = client.post("/api/dev/tamper", json={"record_db_id": record["id"]})
+    assert disabled.status_code == 403
+
+    monkeypatch.setenv("HASHLOG_ENABLE_TAMPER_TEST", "true")
+    applied = client.post("/api/dev/tamper", json={"record_db_id": record["id"]})
+    assert applied.status_code == 200
+    assert applied.json()["changed_field"] == "content_hash"
+
+    audit = client.get("/api/ledger/verify")
+    assert audit.json()["valid"] is False
+    assert audit.json()["tampered_at"] == record["id"]
+
+    reverted = client.post("/api/dev/tamper/revert", json={"record_db_id": record["id"]})
+    assert reverted.status_code == 200
+    assert client.get("/api/ledger/verify").json()["valid"] is True
+
+
 def test_import_hashes_batch_without_returning_content(client: TestClient):
     response = client.post(
         "/api/records/import",
