@@ -24,7 +24,7 @@ body {
   overflow-x: hidden;
 }
 
-/* Subtle luxury noise texture overlay across the page like Veluna */
+/* Subtle noise texture overlay like Veluna */
 body::before {
   content: "";
   position: fixed;
@@ -35,17 +35,17 @@ body::before {
   opacity: 0.7;
 }
 
-/* Scrollbar */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: #000000;
 }
 ::-webkit-scrollbar-thumb {
   background: #242424;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #383838;
@@ -53,12 +53,19 @@ body::before {
 
 /* Custom focus ring */
 :focus-visible {
-  outline: 1.5px solid #c9793f;
+  outline: 1px solid #c9793f;
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
-/* Cryptographic spinning seal keyframe */
+/* Clean Card Surface */
+.instrument-card {
+  background: #0a0a0a;
+  border: 1px solid #1f1f1f;
+  border-radius: 8px;
+}
+
+/* Cryptographic spinning seal */
 @keyframes crypto-spin {
   from {
     transform: rotate(0deg);
@@ -77,17 +84,6 @@ body::before {
   }
 }
 
-@keyframes pulse-glow {
-  0%, 100% {
-    opacity: 0.4;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.8;
-    transform: scale(1.04);
-  }
-}
-
 .animate-crypto-spin {
   animation: crypto-spin 40s linear infinite;
 }
@@ -96,19 +92,48 @@ body::before {
   animation: crypto-spin-reverse 30s linear infinite;
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 4s ease-in-out infinite;
+/* Blockchain Connecting Line Pulse Flow */
+@keyframes chain-flow {
+  0% {
+    stroke-dashoffset: 24;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
 }
 
-/* Glass & Glow utilities */
-.glass-panel {
-  background: rgba(10, 10, 10, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid #1f1f1f;
+.animate-chain-flow {
+  stroke-dasharray: 6 6;
+  animation: chain-flow 1.2s linear infinite;
 }
 
-.glass-panel:hover {
-  border-color: #2e2e2e;
+@keyframes pulse-dot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 1;
+  }
 }
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Character Hex Diff Highlighting */
+.hex-char-match {
+  color: #8a8480;
+}
+.hex-char-diff {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: 2px;
+  padding: 0 1px;
+  font-weight: 700;
+}
+
+
+
 
