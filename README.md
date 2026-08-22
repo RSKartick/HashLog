@@ -90,39 +90,47 @@ Row 3: User logged out
 
 To avoid hash discrepancies caused by non-deterministic key ordering or whitespace differences, all payloads undergo strict canonicalization prior to hashing:
 
-$$\text{canonicalize}(X) = \text{JSON}(\text{ensure\_ascii}=\text{False}, \text{sort\_keys}=\text{True}, \text{separators}=(\text{","}, \text{":"}))$$
+```text
+canonicalize(X) = JSON(ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+```
 
 ### 2. Content Hash Computation
 
-Given an external record payload $C$:
+Given an external record payload `C`:
 
-$$\text{content\_hash} = \text{SHA-256}(\text{canonicalize}(C))$$
+```text
+content_hash = SHA-256(canonicalize(C))
+```
 
 ### 3. Entry Hash Computation
 
 Each ledger block binds together both lineages, metadata, and timestamps into a unified proof:
 
-$$\text{payload} = \text{canonicalize}\begin{pmatrix}
-\text{previous\_version\_hash} \\
-\text{previous\_ledger\_hash} \\
-\text{source\_system} \\
-\text{record\_type} \\
-\text{record\_id} \\
-\text{version\_number} \\
-\text{content\_hash} \\
-\text{timestamp}
-\end{pmatrix}$$
+```text
+payload = canonicalize({
+    previous_version_hash,
+    previous_ledger_hash,
+    source_system,
+    record_type,
+    record_id,
+    version_number,
+    content_hash,
+    timestamp
+})
 
-$$\text{entry\_hash} = \text{SHA-256}(\text{payload})$$
+entry_hash = SHA-256(payload)
+```
 
-* For the genesis entry: $\text{previous\_ledger\_hash} = \text{"GENESIS"}$.
-* For version 1 of any record identity: $\text{previous\_version\_hash} = \text{None}$.
+- For the genesis entry: `previous_ledger_hash = "GENESIS"`.
+- For version 1 of any record identity: `previous_version_hash = None`.
 
 ### 4. HMAC-SHA256 Cryptographic Signatures
 
 Audit certificates and downloadable checkpoint anchors are signed with HMAC-SHA256 using the configured `HASHLOG_SIGNING_SECRET`:
 
-$$\text{signature} = \text{HMAC-SHA256}_{\text{secret}}(\text{canonicalize}(\text{payload}))$$
+```text
+signature = HMAC-SHA256(secret, canonicalize(payload))
+```
 
 ### 5. Full Ledger Verification Algorithm
 
