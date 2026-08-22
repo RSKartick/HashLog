@@ -1,0 +1,100 @@
+Yes, you have enough to give your friend frontend work now.
+They can build the complete interface using mock data while we finish the backend. The project brief already defines the layout, colors, components, and API behavior.
+One detail must be kept consistent: use port 8000 for the backend.
+Frontend: http://localhost:5173
+Backend:  http://localhost:8000
+API:      http://localhost:8000/api
+Give your friend this blueprint:
+Create the frontend inside frontend/ using React + Vite.
+
+Build these components:
+
+src/
+├── App.jsx
+├── api.js
+├── index.css
+└── components/
+    ├── Header.jsx
+    ├── AddEntryForm.jsx
+    ├── VerifyPanel.jsx
+    ├── EntryChain.jsx
+    └── EntryBlock.jsx
+Visual design
+Use:
+Background: #0F172A
+Cards:      #1E293B
+Primary:    #06B6D4
+Success:    #10B981
+Danger:     #EF4444
+The interface should contain:
+- A HashLog header
+- A chain status badge
+- A “Verify Chain” button
+- A form for creating entries
+- A verification result panel
+- A scrollable list of log entries
+- Hashes displayed in monospace font
+- Red styling for tampered entries
+- Green styling for valid chains
+API functions
+Create frontend/src/api.js with:
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+
+export const createEntry = (payload) =>
+  axios.post(`${API_BASE_URL}/entries`, payload);
+
+export const getEntries = () =>
+  axios.get(`${API_BASE_URL}/entries`);
+
+export const getEntry = (id) =>
+  axios.get(`${API_BASE_URL}/entries/${id}`);
+
+export const verifyChain = () =>
+  axios.get(`${API_BASE_URL}/verify`);
+
+export const exportLog = () =>
+  axios.get(`${API_BASE_URL}/export`);
+
+export const healthCheck = () =>
+  axios.get(`${API_BASE_URL}/health`);
+Create-entry request
+The form should send:
+{
+  "data": "Payment received",
+  "user_id": "Alice",
+  "file_hash": null,
+  "metadata": {}
+}
+Only data is required.
+Entry response
+The frontend should expect:
+{
+  "id": 1,
+  "user_id": "Alice",
+  "data": "Payment received",
+  "file_hash": null,
+  "timestamp": 1710000000000,
+  "prev_hash": "GENESIS",
+  "entry_hash": "abc123...",
+  "nonce": 0,
+  "metadata": {},
+  "created_at": "2026-08-22 12:00:00"
+}
+Verification response
+For a valid chain:
+{
+  "valid": true,
+  "tampered_at": null,
+  "total_entries": 3,
+  "message": "Chain is valid"
+}
+For a tampered chain:
+{
+  "valid": false,
+  "tampered_at": 2,
+  "total_entries": 3,
+  "message": "Tampering detected at entry #2"
+}
+For now, your friend can use mock data matching these response formats. When the backend endpoints are ready, they only need to replace the mock functions with the real API calls.
+Tell your friend not to edit anything inside backend/. The frontend work should stay inside frontend/.

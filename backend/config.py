@@ -12,3 +12,4 @@ def cors_origins() -> list[str]:
     """Return explicitly configured browser origins for CORS."""
     raw_origins = os.getenv("HASHLOG_CORS_ORIGINS", "http://localhost:5173")
     return [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+#this helps so atht the front end can connect with the backend and start the web app or website

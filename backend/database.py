@@ -1,5 +1,5 @@
 """this is for adding the schema and addingthe core database str to the projeect"""
-
+#main databse part of this whole app
 from __future__ import annotations
 
 import sqlite3
@@ -23,10 +23,12 @@ CREATE TABLE IF NOT EXISTS entries (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
 """
+#the prev_hash and the entry_hash are the most importanat part of this as they are the core hashing storing field
+#also used for creating chain for this
 
 
 def get_db() -> sqlite3.Connection:
-    """Open a configured database connection with dictionary-like rows."""
+    """Open a database with each of the rows and colomns"""
     connection = sqlite3.connect(DATABASE_PATH, timeout=10)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
