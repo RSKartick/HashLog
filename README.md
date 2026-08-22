@@ -1,10 +1,10 @@
 # HashLog
 
-> **Zero-Knowledge External Integrity Ledger & Tamper-Evident Audit Trail**
+> **Zero-Knowledge External Integrity Ledger & Cryptographic Audit Trail**
 
 HashLog is a high-throughput, append-only cryptographic ledger designed to mathematically guarantee the integrity of external database records, documents, and business transactions without persisting raw sensitive data.
 
-By combining zero-knowledge content hashing with dual-lineage SHA-256 hash chains, HashLog instantly exposes any unauthorized database row modification, silent data drift, or rogue deletion with mathematical certainty.
+By combining zero-knowledge content hashing with dual-lineage SHA-256 hash chains, HMAC-signed audit certificates, and independent state checkpoints, HashLog instantly exposes any unauthorized database row modification, silent data drift, or rogue deletion with mathematical certainty.
 
 ---
 
@@ -20,11 +20,12 @@ By combining zero-knowledge content hashing with dual-lineage SHA-256 hash chain
 8. [Getting Started (Step-by-Step Setup)](#getting-started-step-by-step-setup)
    - [Backend Setup (FastAPI)](#1-backend-setup-python--fastapi)
    - [Frontend Setup (React + Vite)](#2-frontend-setup-react--vite)
-   - [Running Automated Tests](#3-running-automated-tests)
-9. [Tamper Detection Demonstration](#tamper-detection-demonstration)
-10. [Configuration & Environment Variables](#configuration--environment-variables)
-11. [Enterprise Compliance & Use Cases](#enterprise-compliance--use-cases)
-12. [Repository Structure](#repository-structure)
+   - [Running Verification & Test Suite](#3-running-verification--test-suite)
+9. [Deployment Guide (Vercel Serverless)](#deployment-guide-vercel-serverless)
+10. [Tamper Detection Demonstration](#tamper-detection-demonstration)
+11. [Configuration & Environment Variables](#configuration--environment-variables)
+12. [Enterprise Compliance & Use Cases](#enterprise-compliance--use-cases)
+13. [Repository Structure](#repository-structure)
 
 ---
 
@@ -36,7 +37,8 @@ Unlike conventional logging engines that duplicate mutable application data into
 2. **Dual-Lineage Cryptographic Graph**:
    - **Global Ledger Spine (`previous_ledger_hash`)**: Every record is linked linearly to the preceding ledger entry across all systems, forming an append-only timeline starting from `GENESIS`.
    - **Per-Record Version Chain (`previous_version_hash`)**: Entries sharing the same composite identity (`source_system`, `record_type`, `record_id`) maintain an independent version lineage ($v1 \rightarrow v2 \rightarrow v3$).
-3. **Independent Checkpoint Anchoring**: Periodically freezes ledger root hashes into point-in-time snapshot anchors for external verification or decentralized timestamping.
+3. **Cryptographically Signed Audit Certificates**: Generates HMAC-SHA256 signed evidence certificates (`HASHLOG_AUDIT_CERTIFICATE_V1`) for external verification and auditing.
+4. **Independent Checkpoint Anchoring**: Periodically freezes ledger root hashes into point-in-time snapshot anchors (`HASHLOG_CHECKPOINT_ANCHOR_V1`) for off-chain or decentralized verification.
 
 ```
 GLOBAL LEDGER SPINE:
@@ -78,7 +80,7 @@ Row 3: User logged out
 | **Write Latency** | $< 5\text{ ms}$ | $2\text{ s} - 15\text{ min}$ | **$< 2\text{ ms}$** |
 | **Cost & Gas Fees** | Low | High per transaction | **Zero gas / standard infrastructure** |
 | **Storage Footprint** | Large (full payloads) | Very Large | **Minimal (32-byte hashes + metadata)** |
-| **Deployment Model** | Relational / NoSQL | Distributed Node Network | **Lightweight Microservice (Docker / Fastify / FastAPI)** |
+| **Deployment Model** | Relational / NoSQL | Distributed Node Network | **Lightweight Microservice / Vercel Serverless** |
 
 ---
 
@@ -116,7 +118,13 @@ $$\text{entry\_hash} = \text{SHA-256}(\text{payload})$$
 * For the genesis entry: $\text{previous\_ledger\_hash} = \text{"GENESIS"}$.
 * For version 1 of any record identity: $\text{previous\_version\_hash} = \text{None}$.
 
-### 4. Full Ledger Verification Algorithm
+### 4. HMAC-SHA256 Cryptographic Signatures
+
+Audit certificates and downloadable checkpoint anchors are signed with HMAC-SHA256 using the configured `HASHLOG_SIGNING_SECRET`:
+
+$$\text{signature} = \text{HMAC-SHA256}_{\text{secret}}(\text{canonicalize}(\text{payload}))$$
+
+### 5. Full Ledger Verification Algorithm
 
 Verification performs a linear single-pass audit across the entire chain:
 
@@ -158,22 +166,23 @@ return PASS(valid=True, total_records=count)
 graph TD
     Client["Client / External Enterprise Apps"]
     WebUI["Interactive Web Console (React 18 + Vite + Tailwind CSS)"]
-    FastAPI["API Engine (FastAPI + Uvicorn)"]
-    HashUtils["Cryptographic Engine (Python hashlib SHA-256)"]
+    FastAPI["API Engine (FastAPI + Uvicorn / Vercel Serverless)"]
+    HashUtils["Cryptographic Engine (SHA-256 + HMAC Signing)"]
     SQLite[("Immutable Store (SQLite WAL Mode / PostgreSQL)")]
 
     Client -->|POST /api/records/register| FastAPI
     Client -->|POST /api/records/verify| FastAPI
     WebUI -->|HTTP / JSON API| FastAPI
-    FastAPI -->|Canonicalize & Hash| HashUtils
+    FastAPI -->|Canonicalize, Hash & Sign| HashUtils
     FastAPI -->|Append / Verify Rows| SQLite
 ```
 
 ### Core Technologies
-- **Backend Service**: Python 3.10+, FastAPI (ASGI), Uvicorn, Pydantic v2.
+- **Backend Service**: Python 3.10+, FastAPI (ASGI), Uvicorn, Pydantic v2, Serverless support via `api/index.py`.
 - **Data Persistence**: SQLite with Write-Ahead Logging (`PRAGMA journal_mode = WAL`) and row busy timeout safeguards; clean architecture ready for PostgreSQL.
 - **Frontend Studio**: React 18, Vite, Tailwind CSS, React Icons, Axios.
 - **Design System**: Luxury Veluna-inspired dark obsidian theme (`#000000`), subtle fractal noise overlay, warm copper accents (`#c9793f`), and Fraunces serif typography.
+- **Continuous Integration / Verification**: `run_all.sh` shell test runner for cross-platform validation.
 
 ---
 
@@ -272,15 +281,28 @@ Traverses and cryptographically recomputes the entire global ledger and every ve
 
 ---
 
-### 3. Checkpoints & State Anchoring
+### 3. Checkpoints & Signed Cryptographic Artifacts
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/api/checkpoints` | Create a snapshot anchor of the current ledger root hash |
 | `GET` | `/api/checkpoints` | List all historical checkpoint anchors |
 | `GET` | `/api/checkpoints/{id}/verify` | Cryptographically verify all records covered by a specific checkpoint |
+| `GET` | `/api/checkpoints/{id}/anchor` | Download a signed HMAC-SHA256 checkpoint anchor (`HASHLOG_CHECKPOINT_ANCHOR_V1`) |
+| `GET` | `/api/audit/certificate` | Generate a signed HMAC-SHA256 ledger audit certificate (`HASHLOG_AUDIT_CERTIFICATE_V1`) |
 | `GET` | `/api/export` | Export all ledger proofs as a chronological JSON array |
 | `GET` | `/api/health` | Service health status and total proof count |
+
+---
+
+### 4. Development-Only Tamper Simulation APIs
+
+*(Available only when `HASHLOG_ENABLE_TAMPER_TEST=true` is set)*
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/api/dev/tamper` | Intentionally corrupt a stored hash proof to demonstrate live audit failure |
+| `POST` | `/api/dev/tamper/revert` | Restore the original backed-up hash proof to return the chain to valid state |
 
 ---
 
@@ -385,19 +407,55 @@ CREATE INDEX IF NOT EXISTS idx_hash_records_ledger_hash
    npm run dev
    ```
 
-4. Open `http://localhost:5173` in your web browser.
+4. Open `http://localhost:5173` in your web browser. Local requests to `/api` and `/docs` are automatically proxied to `http://localhost:8000`.
 
 ---
 
-### 3. Running Automated Tests
+### 3. Running Verification & Test Suite
 
-To execute the backend test suite covering canonical hashing, duplicate version prevention, rate limiting, and tamper detection:
+To run the unified verification script covering the backend test suite and the frontend production build:
+
+```bash
+# Run all automated checks (backend pytest + frontend production build)
+./run_all.sh
+```
+
+Or run the backend test suite directly:
 
 ```bash
 cd backend
 pip install -r requirements-dev.txt
 pytest -v
 ```
+
+---
+
+## Deployment Guide (Vercel Serverless)
+
+HashLog is designed to deploy cleanly to Vercel as two coordinated projects:
+
+### 1. Backend Project (FastAPI Serverless)
+- Set repository root as the Vercel Root Directory.
+- Vercel automatically detects `api/index.py` as the Python serverless function.
+- Configure Environment Variables:
+  ```text
+  HASHLOG_CORS_ORIGINS=https://YOUR-FRONTEND.vercel.app
+  HASHLOG_API_KEY=your-secure-random-api-key
+  HASHLOG_SIGNING_SECRET=your-secure-signing-secret
+  HASHLOG_ENABLE_TAMPER_TEST=false
+  ```
+- Test deployment: `https://YOUR-BACKEND.vercel.app/api/health`
+
+### 2. Frontend Project (Vite Static Build)
+- Set `frontend` as the Vercel Root Directory.
+- Build Command: `npm run build` | Output Directory: `dist`.
+- Configure Environment Variables:
+  ```text
+  VITE_API_BASE_URL=https://YOUR-BACKEND.vercel.app/api
+  VITE_API_KEY=your-secure-random-api-key
+  ```
+
+> **Note on Storage Persistence**: On Vercel serverless functions, the local filesystem is ephemeral (`/tmp/hashlog.db`). For persistent production deployments, connect HashLog to a managed external PostgreSQL database.
 
 ---
 
@@ -442,14 +500,18 @@ print('Corrupted record #1 content hash in SQLite.')
 
 ## Configuration & Environment Variables
 
-HashLog supports environment variable configuration via `.env` or system environment:
+HashLog supports comprehensive environment variable configuration:
 
 | Variable | Default Value | Description |
 | :--- | :--- | :--- |
-| `HASHLOG_DB_PATH` | `hashlog.db` | Path to the SQLite database file |
+| `HASHLOG_DATABASE_PATH` | `hashlog.db` | Path to the SQLite database file (falls back to `/tmp/hashlog.db` on Vercel) |
 | `HASHLOG_API_KEY` | `None` (Disabled) | Secret token required in `X-API-Key` header |
-| `HASHLOG_RATE_LIMIT_PER_MINUTE` | `120` | Maximum requests per minute per IP address |
-| `HASHLOG_CORS_ORIGINS` | `*` | Comma-separated list of allowed CORS origins |
+| `HASHLOG_RATE_LIMIT_PER_MINUTE` | `120` | Maximum requests per minute per client IP |
+| `HASHLOG_CORS_ORIGINS` | `http://localhost:5173` | Comma-separated list of allowed browser origins |
+| `HASHLOG_SIGNING_SECRET` | `hashlog-local-demo-signing-secret` | Secret key used for HMAC-SHA256 certificate and anchor signatures |
+| `HASHLOG_ENABLE_TAMPER_TEST` | `false` | Enables `/api/dev/tamper` endpoints for development demonstrations |
+| `VITE_API_BASE_URL` | `/api` | Base API URL consumed by the React frontend |
+| `VITE_API_KEY` | `None` | Optional client API key sent in `X-API-Key` request header |
 
 ---
 
@@ -467,20 +529,25 @@ HashLog supports environment variable configuration via `.env` or system environ
 
 ```text
 HashLog/
+├── api/
+│   └── index.py              # Vercel serverless entrypoint for FastAPI
 ├── backend/
 │   ├── config.py             # Environment configuration & path resolvers
 │   ├── database.py           # SQLite connection pool, schema init, & WAL mode
 │   ├── hash_utils.py         # Canonical JSON serialization & SHA-256 helpers
-│   ├── main.py               # FastAPI application routes & verification engine
+│   ├── main.py               # FastAPI application routes, HMAC signing & verification
 │   ├── models.py             # Pydantic v2 request/response schemas
 │   ├── requirements.txt      # Production dependencies (FastAPI, uvicorn)
 │   ├── requirements-dev.txt  # Testing dependencies (pytest, httpx)
+│   ├── README.md             # Backend-specific developer documentation
 │   └── tests/
 │       └── test_hashlog.py   # Comprehensive automated test suite
 ├── frontend/
 │   ├── index.html            # HTML entry point with Fraunces & DM Sans typography
 │   ├── package.json          # Node dependencies & Vite scripts
 │   ├── tailwind.config.js    # Custom typography & copper color palette
+│   ├── vercel.json           # Vercel SPA rewrite rules
+│   ├── vite.config.js        # Vite dev server configuration & API proxy
 │   └── src/
 │       ├── App.jsx           # Master application container & state router
 │       ├── api.js            # API client with SHA-256 fallback simulation
@@ -497,6 +564,9 @@ HashLog/
 │           ├── EntryList.jsx          # Filterable & searchable immutable proof vault
 │           ├── EntryCard.jsx          # Individual proof card with copyable digests
 │           └── StatusBar.jsx          # Footer telemetry & active node heartbeat
+├── VERCEL_DEPLOYMENT.md      # Step-by-step Vercel multi-project deployment guide
+├── requirements.txt          # Root Python dependencies for serverless runtime
+├── run_all.sh                # Test runner executing backend pytest & frontend build
 └── README.md                 # Master project documentation
 ```
 
@@ -505,4 +575,5 @@ HashLog/
 ## License
 
 This project is open source and available under the [MIT License](LICENSE).
+
 
