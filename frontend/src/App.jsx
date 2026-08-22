@@ -116,8 +116,12 @@ export default function App() {
       const result = await verifyLedger();
       setVerifyResult(result);
       if (!result.valid && result.tampered_at) {
-        const ids = new Set();
-        for (let i = result.tampered_at; i <= records.length; i++) ids.add(i);
+        // tampered_at is the SQLite block ID, not the record's array position.
+        // The API list is newest-first, so mark the fractured block and every
+        // later database block by comparing actual IDs.
+        const ids = new Set(
+          records.filter((record) => record.id >= result.tampered_at).map((record) => record.id)
+        );
         setTamperedIds(ids);
       } else {
         setTamperedIds(new Set());
