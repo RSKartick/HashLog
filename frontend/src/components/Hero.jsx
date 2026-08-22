@@ -169,7 +169,7 @@ export default function Hero({ recordCount, latestHash, onVerifyClick }) {
                 {/* Tip Block Node */}
                 <div className="flex flex-col items-center group cursor-default shrink-0">
                   <div className="w-10 h-10 rounded-[6px] bg-[#1a1410] border border-[#c9793f]/80 flex flex-col items-center justify-center relative shadow-[0_0_12px_rgba(201,121,63,0.3)]">
-                    <span className="font-mono text-[10px] text-[#c9793f] font-bold">#{recordCount || 4}</span>
+                    <span className="font-mono text-[10px] text-[#c9793f] font-bold">#{recordCount || "—"}</span>
                     <span className="font-mono text-[7px] text-[#f0ece9]">TIP</span>
                     <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#10b981] animate-pulse" />
                   </div>
@@ -200,7 +200,7 @@ export default function Hero({ recordCount, latestHash, onVerifyClick }) {
               <div className="flex items-center justify-between">
                 <span className="text-[#8a8480]">Latest Proof Hash</span>
                 <span className="text-[#b8b2ae] font-mono text-[11px] truncate max-w-[160px] select-all">
-                  {latestHash ? `${latestHash.slice(0, 10)}...${latestHash.slice(-6)}` : "d9e830c2b1...8201fe"}
+                  {latestHash ? `${latestHash.slice(0, 10)}...${latestHash.slice(-6)}` : "—"}
                 </span>
               </div>
             </div>

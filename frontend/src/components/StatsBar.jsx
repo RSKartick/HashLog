@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FiDatabase, FiShield, FiCheckCircle, FiAlertTriangle, FiCopy, FiCheck, FiCpu, FiLock, FiActivity, FiArrowUpRight } from "react-icons/fi";
 
-export default function StatsBar({ recordCount, verifyResult, latestHash, checkpointsCount, mockMode }) {
+export default function StatsBar({ recordCount, verifyResult, latestHash, checkpointsCount }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyHash = () => {
@@ -29,17 +29,10 @@ export default function StatsBar({ recordCount, verifyResult, latestHash, checkp
         </div>
 
         <div className="flex items-center gap-2">
-          {mockMode ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#161616] border border-[#2e2e2e] text-[10px] font-mono text-[#b8b2ae]">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-              <span>Local Mock Runtime</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/40 border border-emerald-800/40 text-[10px] font-mono text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Node Online · Port 8000</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/40 border border-emerald-800/40 text-[10px] font-mono text-emerald-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Ledger Live</span>
+          </div>
         </div>
       </div>
 
@@ -70,13 +63,17 @@ export default function StatsBar({ recordCount, verifyResult, latestHash, checkp
             {/* Micro Block Progression Bar */}
             <div className="space-y-1.5 pt-2 border-t border-[#161616]">
               <div className="flex gap-1 h-1.5">
-                {Array.from({ length: Math.min(recordCount || 4, 8) }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 bg-[#c9793f] rounded-full opacity-80 transition-all"
-                    style={{ opacity: 0.4 + (i / 8) * 0.6 }}
-                  />
-                ))}
+                {recordCount > 0 ? (
+                  Array.from({ length: Math.min(recordCount, 8) }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 bg-[#c9793f] rounded-full opacity-80 transition-all"
+                      style={{ opacity: 0.4 + (i / 8) * 0.6 }}
+                    />
+                  ))
+                ) : (
+                  <div className="flex-1 bg-[#1a1a1a] rounded-full" />
+                )}
               </div>
               <p className="font-mono text-[10px] text-[#5a5654] flex justify-between">
                 <span>Monotonic sequence</span>
@@ -211,9 +208,9 @@ export default function StatsBar({ recordCount, verifyResult, latestHash, checkp
             {/* Copyable Hash Pill */}
             <div
               onClick={handleCopyHash}
-              className="cursor-pointer bg-[#050505] hover:bg-[#0a0a0a] p-2.5 rounded border border-[#1a1a1a] hover:border-[#2e2e2e] transition-colors font-mono text-[11px] text-[#f0ece9] break-all select-all mb-3"
+              className={`bg-[#050505] p-2.5 rounded border border-[#1a1a1a] font-mono text-[11px] break-all select-all mb-3 ${latestHash ? "cursor-pointer hover:bg-[#0a0a0a] hover:border-[#2e2e2e] text-[#f0ece9]" : "text-[#5a5654]"}`}
             >
-              {latestHash ? `${latestHash.slice(0, 11)}...${latestHash.slice(-7)}` : "d9e830c2b1...8201fe"}
+              {latestHash ? `${latestHash.slice(0, 11)}...${latestHash.slice(-7)}` : "— no anchor yet"}
             </div>
 
             <div className="pt-2 border-t border-[#161616] flex items-center justify-between font-mono text-[10px] text-[#5a5654]">

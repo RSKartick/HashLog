@@ -3,10 +3,10 @@ import { FiShield, FiSearch, FiCheckCircle, FiAlertTriangle, FiCpu, FiHash, FiRe
 import { verifyRecord, verifyLedger } from "../api.js";
 
 export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading }) {
-  const [sourceSystem, setSourceSystem] = useState("finance-erp");
-  const [recordType, setRecordType] = useState("invoice");
-  const [recordId, setRecordId] = useState("INV-2026-001");
-  const [content, setContent] = useState('{"amount": 14500.0, "currency": "USD", "status": "SETTLED_WIRE"}');
+  const [sourceSystem, setSourceSystem] = useState("");
+  const [recordType, setRecordType] = useState("");
+  const [recordId, setRecordId] = useState("");
+  const [content, setContent] = useState("");
   const [recordResult, setRecordResult] = useState(null);
   const [recordError, setRecordError] = useState(null);
   const [recordLoading, setRecordLoading] = useState(false);

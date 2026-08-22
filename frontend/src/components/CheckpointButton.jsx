@@ -14,15 +14,7 @@ export default function CheckpointButton({ onCheckpointAdded }) {
       const data = await listCheckpoints();
       setCheckpoints(Array.isArray(data) ? data : []);
     } catch {
-      setCheckpoints([
-        {
-          id: 1,
-          ledger_height: 4,
-          root_hash: "a3f589c20184b2e881023fc9910d8a43bb20e3a9854721a9c80d85ef193309a4",
-          timestamp: Date.now() - 3600000,
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ]);
+      setCheckpoints([]);
     }
   };
 
@@ -37,15 +29,7 @@ export default function CheckpointButton({ onCheckpointAdded }) {
       await fetchCheckpointsList();
       if (onCheckpointAdded) onCheckpointAdded();
     } catch {
-      const newMock = {
-        id: checkpoints.length + 1,
-        ledger_height: (checkpoints[checkpoints.length - 1]?.ledger_height || checkpoints[checkpoints.length - 1]?.last_record_id || 4) + 1,
-        root_hash: Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2),
-        timestamp: Date.now(),
-        created_at: new Date().toISOString(),
-      };
-      setCheckpoints((c) => [newMock, ...c]);
-      if (onCheckpointAdded) onCheckpointAdded();
+      // no fake fallback — checkpoint creation requires live backend
     } finally {
       setLoading(false);
     }
@@ -56,10 +40,10 @@ export default function CheckpointButton({ onCheckpointAdded }) {
     try {
       const res = await verifyCheckpoint(id);
       setVerifyResults((r) => ({ ...r, [id]: res }));
-    } catch {
+    } catch (err) {
       setVerifyResults((r) => ({
         ...r,
-        [id]: { valid: true, message: `Checkpoint #${id} matches on-chain root proof` },
+        [id]: { valid: false, message: err?.response?.data?.detail || "Checkpoint verification failed" },
       }));
     } finally {
       setVerifyingId(null);

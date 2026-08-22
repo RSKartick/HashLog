@@ -1,6 +1,6 @@
 import { FiActivity, FiServer, FiLock, FiTerminal, FiExternalLink } from "react-icons/fi";
 
-export default function StatusBar({ health, onRefresh, mockMode }) {
+export default function StatusBar({ health, onRefresh }) {
   return (
     <footer className="w-full border-t border-[#1a1a1a] bg-[#050505] py-12 px-4 sm:px-8 mt-20 text-[#8a8480] font-mono text-xs">
       <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-start mb-8">
@@ -55,11 +55,11 @@ export default function StatusBar({ health, onRefresh, mockMode }) {
           <div className="flex md:justify-end items-center gap-2">
             <span
               className={`w-2 h-2 rounded-full ${
-                mockMode ? "bg-amber-500 animate-pulse" : health ? "bg-emerald-400" : "bg-red-400"
+                health ? "bg-emerald-400" : "bg-red-400"
               }`}
             />
             <span className="text-[#f0ece9]">
-              {mockMode ? "Mock Runtime Active" : health ? "Node Online (Port 8000)" : "Node Unreachable"}
+              {health ? "Node Online (Port 8000)" : "Node Unreachable"}
             </span>
           </div>
 

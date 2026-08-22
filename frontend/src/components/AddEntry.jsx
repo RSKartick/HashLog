@@ -1,48 +1,28 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { FiPlus, FiUploadCloud, FiDatabase, FiTag, FiHash, FiFileText, FiCheck, FiCpu, FiX, FiLayers, FiActivity } from "react-icons/fi";
-import { sha256 } from "../api.js";
+import { useState, useRef, useMemo } from "react";
+import { FiPlus, FiUploadCloud, FiDatabase, FiTag, FiHash, FiFileText, FiCheck, FiX } from "react-icons/fi";
 
 export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
   const [tab, setTab] = useState("single"); // "single" | "batch"
   
   // Single registration state
-  const [sourceSystem, setSourceSystem] = useState("finance-erp");
-  const [recordType, setRecordType] = useState("invoice");
+  const [sourceSystem, setSourceSystem] = useState("");
+  const [recordType, setRecordType] = useState("");
   const [recordId, setRecordId] = useState("");
   const [content, setContent] = useState("");
   const [metadataJson, setMetadataJson] = useState("");
-  const [clientHash, setClientHash] = useState("");
 
   // Batch import state
   const [file, setFile] = useState(null);
   const [batchParsed, setBatchParsed] = useState(null);
   const [batchError, setBatchError] = useState(null);
-  const [batchSource, setBatchSource] = useState("data-pipeline");
-  const [batchType, setBatchType] = useState("audit_event");
+  const [batchSource, setBatchSource] = useState("");
+  const [batchType, setBatchType] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Compute live SHA-256 preview and byte metrics
   const byteMetrics = useMemo(() => {
     const bytes = new TextEncoder().encode(content).length;
-    return {
-      bytes,
-      chars: content.length,
-    };
-  }, [content]);
-
-  useEffect(() => {
-    if (!content.trim()) {
-      setClientHash("");
-      return;
-    }
-    let parsed = content;
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      parsed = content;
-    }
-    sha256(parsed).then((h) => setClientHash(h));
+    return { bytes, chars: content.length };
   }, [content]);
 
   const handleSingleSubmit = (e) => {
@@ -247,19 +227,6 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
                 className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[4px] p-3 font-mono text-xs text-[#f0ece9] focus:outline-none transition-colors resize-y"
               />
             </div>
-
-            {/* Live SHA-256 Preview Strip */}
-            {clientHash && (
-              <div className="bg-[#050505] border border-[#1f1f1f] rounded-[4px] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono text-xs">
-                <span className="text-[#8a8480] flex items-center gap-1.5 text-[10px]">
-                  <FiCpu className="w-3.5 h-3.5 text-[#c9793f]" />
-                  <span>CLIENT-SIDE SHA-256 PROOF PREVIEW:</span>
-                </span>
-                <span className="text-[#f0ece9] font-medium truncate max-w-sm sm:max-w-md select-all text-[11px]">
-                  {clientHash}
-                </span>
-              </div>
-            )}
 
             {/* Optional Metadata */}
             <div>
