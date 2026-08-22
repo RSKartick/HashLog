@@ -35,8 +35,8 @@ def rate_limit_per_minute() -> int:
 
 
 def tamper_test_enabled() -> bool:
-    """Allow the local development-only tamper simulator only when enabled."""
-    return os.getenv("HASHLOG_ENABLE_TAMPER_TEST", "false").strip().lower() in {
+    """Allow the development tamper simulator by default for the demo deployment."""
+    return os.getenv("HASHLOG_ENABLE_TAMPER_TEST", "true").strip().lower() in {
         "1",
         "true",
         "yes",

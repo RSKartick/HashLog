@@ -33,10 +33,17 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [checkpointsCount, setCheckpointsCount] = useState(0);
   const [recordsLoading, setRecordsLoading] = useState(true);
+  const [logSnapshots, setLogSnapshots] = useState({});
 
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const rememberSnapshot = (sourceSystem, recordType, recordId, content) => {
+    if (content === undefined || content === null) return;
+    const key = `${sourceSystem}/${recordType}/${recordId}`;
+    setLogSnapshots((current) => ({ ...current, [key]: String(content) }));
   };
 
   const fetchRecords = useCallback(async () => {
@@ -71,6 +78,7 @@ export default function App() {
     setLoading((s) => ({ ...s, entry: true }));
     try {
       await registerRecord({ source_system, record_type, record_id, content, metadata });
+      rememberSnapshot(source_system, record_type, record_id, typeof content === "string" ? content : JSON.stringify(content, null, 2));
       await fetchRecords();
       setVerifyResult(null);
       setTamperedIds(new Set());
@@ -86,6 +94,7 @@ export default function App() {
     setLoading((s) => ({ ...s, upload: true }));
     try {
       await importRecords({ source_system, record_type, records: batchItems });
+      batchItems.forEach((item) => rememberSnapshot(source_system, record_type, item.record_id, item.content));
       await fetchRecords();
       setVerifyResult(null);
       setTamperedIds(new Set());
@@ -144,6 +153,11 @@ export default function App() {
     await handleVerifyLedger();
   };
 
+  const handleAuthorizedVersion = async () => {
+    await fetchRecords();
+    await handleVerifyLedger();
+  };
+
   const latestHash = records.length > 0 ? records[records.length - 1].entry_hash : null;
 
   return (
@@ -191,6 +205,8 @@ export default function App() {
           ledgerResult={verifyResult}
           ledgerLoading={loading.verify}
           onMessage={showToast}
+          onAuthorizedVersion={handleAuthorizedVersion}
+          logSnapshots={logSnapshots}
         />
 
         <TamperLab

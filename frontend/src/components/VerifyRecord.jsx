@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
 import { FiShield, FiSearch, FiCheckCircle, FiAlertTriangle, FiCpu, FiHash, FiRefreshCw, FiCheck, FiActivity } from "react-icons/fi";
-import { verifyRecord, verifyLedger, getAuditCertificate } from "../api.js";
+import { verifyRecord, registerRecord, verifyLedger, getAuditCertificate } from "../api.js";
 
-export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading, onMessage }) {
+export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading, onMessage, onAuthorizedVersion, logSnapshots = {} }) {
   const [sourceSystem, setSourceSystem] = useState("");
   const [recordType, setRecordType] = useState("");
   const [recordId, setRecordId] = useState("");
@@ -10,6 +10,8 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
   const [recordResult, setRecordResult] = useState(null);
   const [recordError, setRecordError] = useState(null);
   const [recordLoading, setRecordLoading] = useState(false);
+  const [authorizeLoading, setAuthorizeLoading] = useState(false);
+  const [showLogComparison, setShowLogComparison] = useState(false);
   const fileInputRef = useRef(null);
 
   const downloadCertificate = async () => {
@@ -74,6 +76,51 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
       setRecordLoading(false);
     }
   };
+
+  const handleAuthorizeVersion = async () => {
+    if (!recordResult || recordResult.valid || authorizeLoading) return;
+    setAuthorizeLoading(true);
+    setRecordError(null);
+    try {
+      let parsedContent;
+      try {
+        parsedContent = JSON.parse(content);
+      } catch {
+        parsedContent = content.trim();
+      }
+      const created = await registerRecord({
+        source_system: sourceSystem.trim(),
+        record_type: recordType.trim(),
+        record_id: recordId.trim(),
+        content: parsedContent,
+        metadata: { change_type: "authorized_update", previous_version: recordResult.latest_version },
+      });
+      onMessage?.(`Authorized version ${created.version_number} registered`);
+      onAuthorizedVersion?.();
+      setRecordResult({
+        ...recordResult,
+        valid: true,
+        latest_version: created.version_number,
+        expected_hash: created.content_hash,
+        actual_hash: created.content_hash,
+        message: `Authorized version ${created.version_number} registered and linked to the previous version`,
+      });
+    } catch (error) {
+      setRecordError(error?.response?.data?.detail || "Could not register authorized version");
+    } finally {
+      setAuthorizeLoading(false);
+    }
+  };
+
+  const snapshotKey = `${sourceSystem.trim()}/${recordType.trim()}/${recordId.trim()}`;
+  const originalContent = logSnapshots[snapshotKey];
+  const originalLines = originalContent?.split(/\r?\n/) || [];
+  const currentLines = content.split(/\r?\n/);
+  const changedLines = Array.from({ length: Math.max(originalLines.length, currentLines.length) }, (_, index) => ({
+    number: index + 1,
+    original: originalLines[index] ?? "",
+    current: currentLines[index] ?? "",
+  })).filter((line) => line.original !== line.current);
 
   return (
     <section id="verify" className="w-full max-w-6xl mx-auto px-4 sm:px-8 py-10 border-t border-[#1a1a1a]">
@@ -296,6 +343,55 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
                     </span>
                   </div>
                 </div>
+                {!recordResult.valid && recordResult.latest_version && (
+                  <button
+                    type="button"
+                    onClick={handleAuthorizeVersion}
+                    disabled={authorizeLoading}
+                    className="w-full mt-2 flex items-center justify-center gap-2 bg-[#1a1410] border border-[#8a5730]/70 text-[#c9793f] hover:text-[#f0ece9] py-2.5 rounded-[4px] disabled:opacity-40"
+                  >
+                    {authorizeLoading ? "Registering linked version..." : "Register as authorized new version"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {originalContent !== undefined && content && (
+              <div className="border border-[#242424] rounded-[4px] bg-[#080808] overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowLogComparison((visible) => !visible)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 font-mono text-xs text-[#c9793f] hover:text-[#f0ece9]"
+                >
+                  <span>{showLogComparison ? "Hide log comparison" : "View original and current log"}</span>
+                  <span>{changedLines.length} changed line{changedLines.length === 1 ? "" : "s"}</span>
+                </button>
+                {showLogComparison && (
+                  <div className="border-t border-[#242424] p-3 space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <div className="font-mono text-[10px] uppercase text-[#8a8480] mb-1">Original session snapshot</div>
+                        <pre className="max-h-56 overflow-auto whitespace-pre-wrap bg-[#050505] border border-[#1f1f1f] p-3 text-[10px] text-emerald-300">{originalContent}</pre>
+                      </div>
+                      <div>
+                        <div className="font-mono text-[10px] uppercase text-[#8a8480] mb-1">Current file</div>
+                        <pre className="max-h-56 overflow-auto whitespace-pre-wrap bg-[#050505] border border-[#1f1f1f] p-3 text-[10px] text-red-300">{content}</pre>
+                      </div>
+                    </div>
+                    {changedLines.length > 0 && (
+                      <div className="font-mono text-[10px] space-y-1">
+                        <div className="text-[#8a8480] uppercase">Changed lines</div>
+                        {changedLines.slice(0, 50).map((line) => (
+                          <div key={line.number} className="grid grid-cols-[45px_1fr] gap-2 bg-[#111111] p-1.5">
+                            <span className="text-[#c9793f]">Line {line.number}</span>
+                            <span><span className="text-red-300">- {line.original || "(removed)"}</span><br /><span className="text-emerald-300">+ {line.current || "(added)"}</span></span>
+                          </div>
+                        ))}
+                        {changedLines.length > 50 && <div className="text-[#8a8480]">Showing first 50 changed lines.</div>}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </form>
