@@ -43,7 +43,11 @@ export default function App() {
   const rememberSnapshot = (sourceSystem, recordType, recordId, content) => {
     if (content === undefined || content === null) return;
     const key = `${sourceSystem}/${recordType}/${recordId}`;
-    setLogSnapshots((current) => ({ ...current, [key]: String(content) }));
+    setLogSnapshots((current) => {
+      const previous = current[key];
+      const text = String(content);
+      return { ...current, [key]: { original: previous?.original ?? text, current: text } };
+    });
   };
 
   const fetchRecords = useCallback(async () => {
@@ -158,6 +162,10 @@ export default function App() {
     await handleVerifyLedger();
   };
 
+  const handleCurrentLogObserved = (sourceSystem, recordType, recordId, content) => {
+    rememberSnapshot(sourceSystem, recordType, recordId, content);
+  };
+
   const latestHash = records.length > 0 ? records[records.length - 1].entry_hash : null;
 
   return (
@@ -206,6 +214,7 @@ export default function App() {
           ledgerLoading={loading.verify}
           onMessage={showToast}
           onAuthorizedVersion={handleAuthorizedVersion}
+          onCurrentLogObserved={handleCurrentLogObserved}
           logSnapshots={logSnapshots}
         />
 
@@ -219,7 +228,7 @@ export default function App() {
           onCheckpointCountChange={setCheckpointsCount}
         />
 
-        <EntryList records={records} tamperedIds={tamperedIds} loading={recordsLoading} />
+        <EntryList records={records} tamperedIds={tamperedIds} loading={recordsLoading} logSnapshots={logSnapshots} />
       </main>
 
       <StatusBar

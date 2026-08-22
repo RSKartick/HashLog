@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { FiShield, FiSearch, FiCheckCircle, FiAlertTriangle, FiCpu, FiHash, FiRefreshCw, FiCheck, FiActivity } from "react-icons/fi";
 import { verifyRecord, registerRecord, verifyLedger, getAuditCertificate } from "../api.js";
 
-export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading, onMessage, onAuthorizedVersion, logSnapshots = {} }) {
+export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading, onMessage, onAuthorizedVersion, onCurrentLogObserved, logSnapshots = {} }) {
   const [sourceSystem, setSourceSystem] = useState("");
   const [recordType, setRecordType] = useState("");
   const [recordId, setRecordId] = useState("");
@@ -69,6 +69,7 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
         content: parsedContent,
       });
       setRecordResult(res);
+      onCurrentLogObserved?.(sourceSystem.trim(), recordType.trim(), recordId.trim(), content);
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
       setRecordError(typeof msg === "string" ? msg : "Verification failed");
@@ -113,7 +114,8 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
   };
 
   const snapshotKey = `${sourceSystem.trim()}/${recordType.trim()}/${recordId.trim()}`;
-  const originalContent = logSnapshots[snapshotKey];
+  const snapshot = logSnapshots[snapshotKey];
+  const originalContent = snapshot?.original ?? snapshot;
   const originalLines = originalContent?.split(/\r?\n/) || [];
   const currentLines = content.split(/\r?\n/);
   const changedLines = Array.from({ length: Math.max(originalLines.length, currentLines.length) }, (_, index) => ({

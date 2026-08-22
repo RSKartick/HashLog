@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FiDatabase, FiTag, FiHash, FiClock, FiLayers, FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiShield } from "react-icons/fi";
+import { FiDatabase, FiTag, FiHash, FiClock, FiLayers, FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiShield, FiGitBranch } from "react-icons/fi";
 
 function truncateHash(hash, chars = 10) {
   if (!hash) return "—";
@@ -7,8 +7,9 @@ function truncateHash(hash, chars = 10) {
   return `${hash.slice(0, chars)}...${hash.slice(-chars)}`;
 }
 
-export default function EntryCard({ record, tampered }) {
+export default function EntryCard({ record, tampered, logSnapshot }) {
   const [expanded, setExpanded] = useState(false);
+  const [showChanges, setShowChanges] = useState(false);
   const [copiedKey, setCopiedKey] = useState(null);
 
   const copyText = (text, key) => {
@@ -17,6 +18,14 @@ export default function EntryCard({ record, tampered }) {
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 1800);
   };
+
+  const originalLines = logSnapshot?.original?.split(/\r?\n/) || [];
+  const currentLines = logSnapshot?.current?.split(/\r?\n/) || [];
+  const changedLines = Array.from({ length: Math.max(originalLines.length, currentLines.length) }, (_, index) => ({
+    number: index + 1,
+    original: originalLines[index] ?? "",
+    current: currentLines[index] ?? "",
+  })).filter((line) => line.original !== line.current);
 
   return (
     <div
@@ -38,6 +47,11 @@ export default function EntryCard({ record, tampered }) {
           {tampered && (
             <span className="font-mono text-[9px] font-semibold uppercase text-red-400 bg-red-950 px-2 py-0.5 rounded border border-red-800/60">
               TAMPERED
+            </span>
+          )}
+          {changedLines.length > 0 && (
+            <span className="font-mono text-[9px] font-semibold uppercase text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/60">
+              {changedLines.length} EDITED LINE{changedLines.length === 1 ? "" : "S"}
             </span>
           )}
         </div>
@@ -69,6 +83,32 @@ export default function EntryCard({ record, tampered }) {
             <span>{record.record_type}</span>
           </div>
         </div>
+
+        {changedLines.length > 0 && (
+          <div className="border border-amber-800/50 bg-amber-950/20 rounded-[4px] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowChanges((visible) => !visible)}
+              className="w-full flex items-center gap-2 px-3 py-2 font-mono text-[10px] text-amber-300 hover:text-amber-100"
+            >
+              <FiGitBranch className="w-3 h-3" />
+              {showChanges ? "Hide visual changes" : `View ${changedLines.length} changed line${changedLines.length === 1 ? "" : "s"}`}
+            </button>
+            {showChanges && (
+              <div className="border-t border-amber-800/40 p-2 space-y-1 font-mono text-[10px]">
+                {changedLines.slice(0, 25).map((line) => (
+                  <div key={line.number} className="bg-[#111111] p-1.5">
+                    <span className="text-[#c9793f] mr-2">Line {line.number}</span>
+                    <span className="text-red-300">- {line.original || "(removed)"}</span>
+                    <span className="mx-2 text-[#8a8480]">→</span>
+                    <span className="text-emerald-300">+ {line.current || "(added)"}</span>
+                  </div>
+                ))}
+                {changedLines.length > 25 && <div className="text-[#8a8480]">Showing first 25 changed lines.</div>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Cryptographic Hashes Grid */}
         <div className="space-y-1.5 bg-[#050505] p-3 rounded border border-[#161616] font-mono text-xs">

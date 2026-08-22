@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { FiInbox, FiSearch, FiFilter, FiArrowDown, FiArrowUp, FiDatabase } from "react-icons/fi";
 import EntryCard from "./EntryCard.jsx";
 
-export default function EntryList({ records, tamperedIds, loading = false }) {
+export default function EntryList({ records, tamperedIds, loading = false, logSnapshots = {} }) {
   const [search, setSearch] = useState("");
   const [selectedSystem, setSelectedSystem] = useState("all");
   const [sortOrder, setSortOrder] = useState("desc"); // "desc" | "asc"
@@ -115,6 +115,7 @@ export default function EntryList({ records, tamperedIds, loading = false }) {
               key={record.id}
               record={record}
               tampered={tamperedIds.has(record.id)}
+              logSnapshot={logSnapshots[`${record.source_system}/${record.record_type}/${record.record_id}`]}
             />
           ))}
         </div>
