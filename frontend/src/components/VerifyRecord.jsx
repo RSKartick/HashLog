@@ -116,6 +116,7 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
   const snapshotKey = `${sourceSystem.trim()}/${recordType.trim()}/${recordId.trim()}`;
   const snapshot = logSnapshots[snapshotKey];
   const originalContent = snapshot?.original ?? snapshot;
+  const ledgerCompromised = Boolean(ledgerResult && !ledgerResult.valid);
   const originalLines = originalContent?.split(/\r?\n/) || [];
   const currentLines = content.split(/\r?\n/);
   const changedLines = Array.from({ length: Math.max(originalLines.length, currentLines.length) }, (_, index) => ({
@@ -220,6 +221,15 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
           </div>
 
           <form onSubmit={handleVerifyRecord} className="space-y-4">
+            {ledgerCompromised && (
+              <div className="p-3 rounded-[4px] border border-amber-800/70 bg-amber-950/20 text-[11px] font-mono text-amber-300 flex items-start gap-2">
+                <FiAlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Global ledger is currently <span className="font-semibold">COMPROMISED</span> — {ledgerResult.message}. Payload
+                  comparisons reflect the corrupted proof; restore true state in the Attack Simulator, then re-run this check.
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block font-mono text-[9px] text-[#8a8480] uppercase mb-1">Source System</label>
@@ -345,7 +355,7 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
                     </span>
                   </div>
                 </div>
-                {!recordResult.valid && recordResult.latest_version && (
+                {!recordResult.valid && recordResult.latest_version && !ledgerCompromised && (
                   <button
                     type="button"
                     onClick={handleAuthorizeVersion}
@@ -354,6 +364,11 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
                   >
                     {authorizeLoading ? "Registering linked version..." : "Register as authorized new version"}
                   </button>
+                )}
+                {!recordResult.valid && ledgerCompromised && (
+                  <p className="font-mono text-[10px] text-[#8a8480]">
+                    Registering a new version is disabled while the global ledger is compromised.
+                  </p>
                 )}
               </div>
             )}

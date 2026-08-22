@@ -52,6 +52,15 @@ CREATE TABLE IF NOT EXISTS raw_logs (
 )
 """
 
+CREATE_TAMPER_BACKUPS_TABLE = """
+CREATE TABLE IF NOT EXISTS tamper_backups (
+    record_db_id INTEGER PRIMARY KEY,
+    content_hash TEXT NOT NULL,
+    entry_hash TEXT NOT NULL,
+    raw_content TEXT
+)
+"""
+
 
 def get_db() -> sqlite3.Connection:
     """Open a database connection with dictionary-like rows."""
@@ -103,6 +112,7 @@ def init_db() -> None:
     raw_connection = get_raw_db()
     try:
         raw_connection.execute(CREATE_RAW_LOGS_TABLE)
+        raw_connection.execute(CREATE_TAMPER_BACKUPS_TABLE)
         raw_connection.commit()
     finally:
         raw_connection.close()

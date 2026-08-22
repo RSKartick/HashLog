@@ -67,9 +67,11 @@ export default function App() {
         });
         return next;
       });
+      return list;
     } catch {
       setRecords([]);
       showToast("Failed to fetch ledger — check API connectivity");
+      return [];
     } finally {
       setRecordsLoading(false);
     }
@@ -121,28 +123,43 @@ export default function App() {
     }
   };
 
-  const handleVerifyLedger = async () => {
+  const runAudit = async (list = records) => {
     setLoading((s) => ({ ...s, verify: true }));
     try {
       const result = await verifyLedger();
       setVerifyResult(result);
-      if (!result.valid && result.tampered_at) {
-        // tampered_at is the SQLite block ID, not the record's array position.
-        // The API list is newest-first, so mark the fractured block and every
-        // later database block by comparing actual IDs.
-        const ids = new Set(
-          records.filter((record) => record.id >= result.tampered_at).map((record) => record.id)
+      if (!result.valid && result.tampered_at != null) {
+        // tampered_at is the SQLite block ID. Compare against actual IDs from
+        // the list that was passed in (never a stale closure).
+        setTamperedIds(
+          new Set(list.filter((record) => record.id >= result.tampered_at).map((record) => record.id))
         );
-        setTamperedIds(ids);
       } else {
         setTamperedIds(new Set());
       }
+      return result;
     } catch (err) {
       showToast(err?.response?.data?.detail || "Ledger verification failed");
+      return null;
     } finally {
       setLoading((s) => ({ ...s, verify: false }));
     }
   };
+
+  const handleVerifyLedger = () => runAudit();
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const list = await fetchRecords();
+      if (!alive || list.length === 0) return;
+      await runAudit(list); // accurate Integrity Status on first paint
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchRecords]);
 
   const handleExport = async () => {
     try {
@@ -168,12 +185,13 @@ export default function App() {
   };
 
   const handleTamperApplied = async () => {
-    await fetchRecords();
-    await handleVerifyLedger();
+    const list = await fetchRecords();
+    await runAudit(list);
   };
 
   const handleAuthorizedVersion = async () => {
-    await fetchRecords();    await handleVerifyLedger();
+    const list = await fetchRecords();
+    await runAudit(list);
   };
 
   const handleCurrentLogObserved = (sourceSystem, recordType, recordId, content) => {

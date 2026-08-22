@@ -71,7 +71,6 @@ except ImportError:  # pragma: no cover - supports `uvicorn main:app` in backend
 
 
 _rate_limit_hits: dict[str, list[float]] = {}
-_tamper_backups: dict[int, tuple[str, str, str | None]] = {}
 
 
 def require_api_key(
@@ -496,11 +495,15 @@ def simulate_tamper(request: TamperTestRequest) -> TamperTestResponse:
             "SELECT content_hash, entry_hash, raw_content FROM hash_records WHERE id = ?",
             (request.record_db_id,),
         ).fetchone()
-        if request.record_db_id not in _tamper_backups:
-            _tamper_backups[request.record_db_id] = (
-                original["content_hash"],
-                original["entry_hash"],
-                original["raw_content"],
+        with raw_db_session() as backup_connection:
+            backup_connection.execute(
+                "INSERT OR IGNORE INTO tamper_backups (record_db_id, content_hash, entry_hash, raw_content) VALUES (?, ?, ?, ?)",
+                (
+                    request.record_db_id,
+                    original["content_hash"],
+                    original["entry_hash"],
+                    original["raw_content"],
+                ),
             )
         tampered_content = _raw_content_json("[TAMPERED DATABASE CONTENT]")
         tampered_hash = compute_content_hash("[TAMPERED DATABASE CONTENT]")
@@ -529,9 +532,16 @@ def revert_tamper(request: TamperTestRequest) -> TamperTestResponse:
     """Restore a proof changed by the current Tamper Lab session."""
     if not tamper_test_enabled():
         raise HTTPException(status_code=403, detail="Tamper simulation is disabled")
-    backup = _tamper_backups.get(request.record_db_id)
+    with raw_db_session() as backup_connection:
+        backup = backup_connection.execute(
+            "SELECT content_hash, entry_hash, raw_content FROM tamper_backups WHERE record_db_id = ?",
+            (request.record_db_id,),
+        ).fetchone()
     if backup is None:
-        raise HTTPException(status_code=404, detail="No temporary tamper backup exists for this proof")
+        raise HTTPException(
+            status_code=404,
+            detail="No tamper backup exists for this proof. If the API restarted mid-demo, re-run the attack once and revert again.",
+        )
     with db_session() as connection:
         row = connection.execute(
             "SELECT id FROM hash_records WHERE id = ?", (request.record_db_id,)
@@ -540,15 +550,18 @@ def revert_tamper(request: TamperTestRequest) -> TamperTestResponse:
             raise HTTPException(status_code=404, detail="Hash record not found")
         connection.execute(
             "UPDATE hash_records SET raw_content = ?, content_hash = ?, entry_hash = ? WHERE id = ?",
-            (backup[2], backup[0], backup[1], request.record_db_id),
+            (backup["raw_content"], backup["content_hash"], backup["entry_hash"], request.record_db_id),
         )
         connection.commit()
     with raw_db_session() as raw_connection:
         raw_connection.execute(
             "UPDATE raw_logs SET raw_content = ? WHERE record_db_id = ?",
-            (backup[2], request.record_db_id),
+            (backup["raw_content"], request.record_db_id),
         )
-    _tamper_backups.pop(request.record_db_id, None)
+    with raw_db_session() as cleanup_connection:
+        cleanup_connection.execute(
+            "DELETE FROM tamper_backups WHERE record_db_id = ?", (request.record_db_id,)
+        )
     return TamperTestResponse(
         record_db_id=request.record_db_id,
         changed_field="raw_content, content_hash, entry_hash",
