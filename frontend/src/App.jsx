@@ -9,6 +9,7 @@ import VerifyRecord from "./components/VerifyRecord.jsx";
 import CheckpointButton from "./components/CheckpointButton.jsx";
 import EntryList from "./components/EntryList.jsx";
 import StatusBar from "./components/StatusBar.jsx";
+import TamperLab from "./components/TamperLab.jsx";
 import CaptchaGate from "./components/CaptchaGate.jsx";
 import {
   listRecords,
@@ -166,9 +167,13 @@ export default function App() {
     }
   };
 
-  const handleAuthorizedVersion = async () => {
+  const handleTamperApplied = async () => {
     await fetchRecords();
     await handleVerifyLedger();
+  };
+
+  const handleAuthorizedVersion = async () => {
+    await fetchRecords();    await handleVerifyLedger();
   };
 
   const handleCurrentLogObserved = (sourceSystem, recordType, recordId, content) => {
@@ -227,6 +232,12 @@ export default function App() {
           onAuthorizedVersion={handleAuthorizedVersion}
           onCurrentLogObserved={handleCurrentLogObserved}
           logSnapshots={logSnapshots}
+        />
+
+        <TamperLab
+          records={records}
+          onTamperApplied={handleTamperApplied}
+          onMessage={showToast}
         />
 
         <CheckpointButton

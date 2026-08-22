@@ -14,6 +14,7 @@ export default function Header({ entryCount, chainValid, onExport, onOpenTamperL
   const navLinks = [
     { label: "explorer", href: "#explorer" },
     { label: "chain", href: "#chain" },
+    { label: "tamper lab", href: "#tamper-lab" },
     { label: "register", href: "#register" },
     { label: "verify", href: "#verify" },
     { label: "checkpoints", href: "#checkpoints" },
