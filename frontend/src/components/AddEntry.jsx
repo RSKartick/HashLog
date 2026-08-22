@@ -1,14 +1,44 @@
-import { useState } from "react";
-import { FiPlus, FiDatabase, FiHash, FiFileText, FiTag } from "react-icons/fi";
+import { useState, useEffect, useRef } from "react";
+import { FiPlus, FiUploadCloud, FiDatabase, FiTag, FiHash, FiFileText, FiCheck, FiCpu, FiX, FiLayers } from "react-icons/fi";
+import { sha256 } from "../api.js";
 
-export default function AddEntry({ onSubmit, loading }) {
-  const [sourceSystem, setSourceSystem] = useState("");
-  const [recordType, setRecordType] = useState("");
+export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
+  const [tab, setTab] = useState("single"); // "single" | "batch"
+  
+  // Single registration state
+  const [sourceSystem, setSourceSystem] = useState("erp-finance");
+  const [recordType, setRecordType] = useState("invoice");
   const [recordId, setRecordId] = useState("");
   const [content, setContent] = useState("");
-  const [expanded, setExpanded] = useState(false);
+  const [metadataJson, setMetadataJson] = useState("");
+  const [clientHash, setClientHash] = useState("");
 
-  const handleSubmit = (e) => {
+  // Batch import state
+  const [file, setFile] = useState(null);
+  const [batchParsed, setBatchParsed] = useState(null);
+  const [batchError, setBatchError] = useState(null);
+  const [batchSource, setBatchSource] = useState("data-pipeline");
+  const [batchType, setBatchType] = useState("audit_event");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Compute live SHA-256 preview when content changes
+  useEffect(() => {
+    if (!content.trim()) {
+      setClientHash("");
+      return;
+    }
+    let parsed = content;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      parsed = content;
+    }
+    sha256(parsed).then((h) => setClientHash(h));
+  }, [content]);
+
+  // Handle single submit
+  const handleSingleSubmit = (e) => {
     e.preventDefault();
     if (!sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim() || loading) return;
 
@@ -19,100 +49,373 @@ export default function AddEntry({ onSubmit, loading }) {
       parsedContent = content.trim();
     }
 
+    let parsedMeta = null;
+    if (metadataJson.trim()) {
+      try {
+        parsedMeta = JSON.parse(metadataJson);
+      } catch {
+        parsedMeta = { note: metadataJson.trim() };
+      }
+    }
+
     onSubmit({
       source_system: sourceSystem.trim(),
       record_type: recordType.trim(),
       record_id: recordId.trim(),
       content: parsedContent,
+      metadata: parsedMeta,
     });
 
-    setContent("");
     setRecordId("");
+    setContent("");
+    setMetadataJson("");
+  };
+
+  // Handle batch file processing
+  const processBatchFile = (f) => {
+    setBatchError(null);
+    setBatchParsed(null);
+    setFile(f);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target.result;
+        let records = [];
+
+        if (f.name.endsWith(".json")) {
+          const json = JSON.parse(text);
+          const arr = Array.isArray(json) ? json : json.records ?? json.entries ?? [json];
+          records = arr.map((item, i) => ({
+            record_id: item.record_id || item.id || `rec-${i + 1}`,
+            content: item.content ?? item.data ?? item,
+            metadata: item.metadata ?? null,
+          }));
+        } else {
+          records = text
+            .split("\n")
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .map((line, i) => ({
+              record_id: `line-${i + 1}`,
+              content: line,
+            }));
+        }
+
+        if (records.length === 0) {
+          setBatchError("File contains no parseable records.");
+          return;
+        }
+
+        setBatchParsed(records);
+      } catch {
+        setBatchError("Failed to parse file. Please provide a JSON array or CSV.");
+      }
+    };
+    reader.readAsText(f);
+  };
+
+  const handleBatchConfirm = () => {
+    if (!batchParsed || !batchSource.trim() || !batchType.trim()) return;
+    onBatchSubmit({
+      source_system: batchSource.trim(),
+      record_type: batchType.trim(),
+      records: batchParsed,
+    });
+    setFile(null);
+    setBatchParsed(null);
   };
 
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-zinc-800/30 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent">
-            <FiPlus size={16} strokeWidth={2.2} />
-          </div>
-          <span className="text-sm font-medium text-zinc-200">
-            Register Record
+    <section id="register" className="w-full max-w-6xl mx-auto px-4 sm:px-8 py-10 border-t border-[#1a1a1a]">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+        <div>
+          <span className="font-mono text-[11px] font-medium tracking-[0.2em] uppercase text-[#8a8480] block mb-1">
+            INGESTION & REGISTRATION
           </span>
+          <h2 className="font-serif text-2xl sm:text-3xl text-[#f0ece9] font-normal">
+            Register Integrity Proofs
+          </h2>
         </div>
-        <span className="text-xs text-zinc-500 font-mono">
-          {expanded ? "collapse" : "expand"}
-        </span>
-      </button>
 
-      {expanded && (
-        <form onSubmit={handleSubmit} className="px-5 pb-5 space-y-3">
-          {/* Identity fields */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="relative">
-              <FiDatabase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-              <input
-                type="text"
-                value={sourceSystem}
-                onChange={(e) => setSourceSystem(e.target.value)}
-                placeholder="Source system"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-1 bg-[#0a0a0a] border border-[#242424] rounded-[6px] p-1">
+          <button
+            type="button"
+            onClick={() => setTab("single")}
+            className={`font-mono text-xs px-3.5 py-1.5 rounded-[4px] transition-colors ${
+              tab === "single"
+                ? "bg-[#1f1f1f] text-[#f0ece9] font-medium shadow-sm"
+                : "text-[#8a8480] hover:text-[#f0ece9]"
+            }`}
+          >
+            Single Record
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("batch")}
+            className={`font-mono text-xs px-3.5 py-1.5 rounded-[4px] transition-colors ${
+              tab === "batch"
+                ? "bg-[#1f1f1f] text-[#f0ece9] font-medium shadow-sm"
+                : "text-[#8a8480] hover:text-[#f0ece9]"
+            }`}
+          >
+            Batch Ingest
+          </button>
+        </div>
+      </div>
+
+      {tab === "single" ? (
+        <div className="bg-[#0a0a0a] border border-[#242424] rounded-[10px] p-6 sm:p-8">
+          <form onSubmit={handleSingleSubmit} className="space-y-5">
+            {/* Identity Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block font-mono text-[11px] text-[#8a8480] uppercase mb-1.5">
+                  Source System *
+                </label>
+                <div className="relative">
+                  <FiDatabase className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5a5654] w-3.5 h-3.5" />
+                  <input
+                    type="text"
+                    required
+                    value={sourceSystem}
+                    onChange={(e) => setSourceSystem(e.target.value)}
+                    placeholder="e.g. postgres-orders"
+                    className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] pl-9 pr-3 py-2.5 font-mono text-xs text-[#f0ece9] focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-mono text-[11px] text-[#8a8480] uppercase mb-1.5">
+                  Record Type *
+                </label>
+                <div className="relative">
+                  <FiTag className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5a5654] w-3.5 h-3.5" />
+                  <input
+                    type="text"
+                    required
+                    value={recordType}
+                    onChange={(e) => setRecordType(e.target.value)}
+                    placeholder="e.g. customer_order"
+                    className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] pl-9 pr-3 py-2.5 font-mono text-xs text-[#f0ece9] focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-mono text-[11px] text-[#8a8480] uppercase mb-1.5">
+                  Record ID *
+                </label>
+                <div className="relative">
+                  <FiHash className="absolute left-3 top-1/2 -translate-y-1/2 text-[#5a5654] w-3.5 h-3.5" />
+                  <input
+                    type="text"
+                    required
+                    value={recordId}
+                    onChange={(e) => setRecordId(e.target.value)}
+                    placeholder="e.g. ORD-2026-904"
+                    className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] pl-9 pr-3 py-2.5 font-mono text-xs text-[#f0ece9] focus:outline-none transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Record Content Payload */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="font-mono text-[11px] text-[#8a8480] uppercase">
+                  External Content Payload (Hashed in memory, never persisted) *
+                </label>
+                <span className="font-mono text-[10px] text-[#5a5654]">JSON or Raw String</span>
+              </div>
+              <textarea
+                required
+                rows={4}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder='{"order_id": "ORD-2026-904", "customer": "Starlight Corp", "total_usd": 8500.0, "status": "CONFIRMED"}'
+                className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] p-3 font-mono text-xs text-[#f0ece9] focus:outline-none transition-colors resize-y"
               />
             </div>
-            <div className="relative">
-              <FiTag size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+
+            {/* Live SHA-256 Preview Pill */}
+            {clientHash && (
+              <div className="bg-[#080808] border border-[#1f1f1f] rounded-[6px] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-mono text-xs">
+                <span className="text-[#8a8480] flex items-center gap-1.5">
+                  <FiCpu className="w-3.5 h-3.5 text-[#c9793f]" />
+                  <span>Computed Content Hash (Client-Side Preview):</span>
+                </span>
+                <span className="text-[#f0ece9] font-medium truncate max-w-sm sm:max-w-md select-all">
+                  {clientHash}
+                </span>
+              </div>
+            )}
+
+            {/* Optional Metadata */}
+            <div>
+              <label className="block font-mono text-[11px] text-[#8a8480] uppercase mb-1.5">
+                Optional Metadata (Stored as key-value JSON)
+              </label>
               <input
                 type="text"
-                value={recordType}
-                onChange={(e) => setRecordType(e.target.value)}
-                placeholder="Record type"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
+                value={metadataJson}
+                onChange={(e) => setMetadataJson(e.target.value)}
+                placeholder='{"migrated_from": "legacy_oracle", "environment": "production"}'
+                className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] px-3 py-2.5 font-mono text-xs text-[#f0ece9] focus:outline-none transition-colors"
               />
             </div>
-          </div>
 
-          <div className="relative">
-            <FiHash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-            <input
-              type="text"
-              value={recordId}
-              onChange={(e) => setRecordId(e.target.value)}
-              placeholder="Record ID"
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
-            />
-          </div>
-
-          <div className="relative">
-            <FiFileText size={14} className="absolute left-3 top-3 text-zinc-500" />
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Record content (plain text or JSON)"
-              rows={4}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none focus:border-accent/50 transition-colors font-mono"
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={!sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim() || loading}
-              className="px-5 py-2 rounded-lg bg-accent text-zinc-950 text-sm font-medium hover:bg-accent-dim disabled:opacity-30 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+            {/* Submit Button */}
+            <div className="flex justify-end pt-3">
+              <button
+                type="submit"
+                disabled={loading || !sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim()}
+                className="inline-flex items-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-black bg-[#f0ece9] hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed px-6 py-3 rounded-[6px] transition-all shadow-[0_0_15px_rgba(201,121,63,0.2)]"
+              >
+                {loading ? (
+                  <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <FiPlus className="w-4 h-4" />
+                )}
+                <span>Commit Proof to Ledger</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : (
+        /* Batch Ingestion Tab */
+        <div className="bg-[#0a0a0a] border border-[#242424] rounded-[10px] p-6 sm:p-8">
+          {!file ? (
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files[0];
+                if (f) processBatchFile(f);
+              }}
+              onClick={() => fileInputRef.current?.click()}
+              className={`flex flex-col items-center justify-center gap-3 py-12 rounded-[8px] border-2 border-dashed cursor-pointer transition-all ${
+                dragOver
+                  ? "border-[#c9793f] bg-[#c9793f]/5"
+                  : "border-[#242424] hover:border-[#383838] hover:bg-[#111111]"
+              }`}
             >
-              {loading ? (
-                <span className="w-4 h-4 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin" />
-              ) : (
-                <FiPlus size={14} strokeWidth={2.5} />
+              <div className="w-12 h-12 rounded-full bg-[#111111] border border-[#242424] flex items-center justify-center text-[#c9793f]">
+                <FiUploadCloud className="w-6 h-6" />
+              </div>
+              <p className="font-mono text-xs text-[#f0ece9]">
+                Drop batch file here or <span className="text-[#c9793f] underline">browse</span>
+              </p>
+              <p className="font-mono text-[11px] text-[#8a8480]">
+                Supports JSON arrays (.json), CSV logs, or newline-delimited text
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3.5 bg-[#080808] border border-[#1f1f1f] rounded-[6px]">
+                <div className="flex items-center gap-3">
+                  <FiFileText className="w-4 h-4 text-[#c9793f]" />
+                  <div>
+                    <div className="font-mono text-xs text-[#f0ece9]">{file.name}</div>
+                    <div className="font-mono text-[10px] text-[#8a8480]">{(file.size / 1024).toFixed(1)} KB</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFile(null);
+                    setBatchParsed(null);
+                  }}
+                  className="p-1 rounded bg-[#161616] text-[#8a8480] hover:text-[#f0ece9]"
+                >
+                  <FiX className="w-4 h-4" />
+                </button>
+              </div>
+
+              {batchError && <p className="text-xs text-red-400 font-mono">{batchError}</p>}
+
+              {batchParsed && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block font-mono text-[11px] text-[#8a8480] uppercase mb-1.5">
+                        Source System *
+                      </label>
+                      <input
+                        type="text"
+                        value={batchSource}
+                        onChange={(e) => setBatchSource(e.target.value)}
+                        className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] px-3 py-2 font-mono text-xs text-[#f0ece9] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-mono text-[11px] text-[#8a8480] uppercase mb-1.5">
+                        Record Type *
+                      </label>
+                      <input
+                        type="text"
+                        value={batchType}
+                        onChange={(e) => setBatchType(e.target.value)}
+                        className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] px-3 py-2 font-mono text-xs text-[#f0ece9] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-[#080808] border border-[#1f1f1f] rounded-[6px] p-3">
+                    <span className="font-mono text-[11px] text-[#8a8480] block mb-2">
+                      Parsed {batchParsed.length} records ready for batch ingestion:
+                    </span>
+                    <div className="space-y-1 max-h-32 overflow-y-auto font-mono text-[11px] text-[#b8b2ae]">
+                      {batchParsed.slice(0, 4).map((rec, i) => (
+                        <div key={i} className="p-1.5 bg-[#111111] rounded truncate">
+                          #{i + 1} [{rec.record_id}]: {typeof rec.content === "string" ? rec.content : JSON.stringify(rec.content)}
+                        </div>
+                      ))}
+                      {batchParsed.length > 4 && (
+                        <div className="text-[10px] text-[#5a5654] pt-1">
+                          +{batchParsed.length - 4} additional records in batch...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleBatchConfirm}
+                    disabled={loading || !batchSource.trim() || !batchType.trim()}
+                    className="w-full flex items-center justify-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-black bg-[#f0ece9] hover:bg-white py-3.5 rounded-[6px] transition-colors"
+                  >
+                    {loading ? (
+                      <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <FiCheck className="w-4 h-4" />
+                    )}
+                    <span>Commit Batch ({batchParsed.length} Proofs)</span>
+                  </button>
+                </div>
               )}
-              Hash & Register
-            </button>
-          </div>
-        </form>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.csv,.txt,.log"
+            onChange={(e) => {
+              const f = e.target.files[0];
+              if (f) processBatchFile(f);
+            }}
+            className="hidden"
+          />
+        </div>
       )}
-    </div>
+    </section>
   );
 }
+

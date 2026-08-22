@@ -1,20 +1,23 @@
 import { useState } from "react";
-import { FiSearch, FiCheckCircle, FiAlertTriangle } from "react-icons/fi";
-import { verifyRecord } from "../api.js";
+import { FiShield, FiSearch, FiCheckCircle, FiAlertTriangle, FiCpu, FiHash, FiRefreshCw, FiCheck } from "react-icons/fi";
+import { verifyRecord, verifyLedger } from "../api.js";
 
-export default function VerifyRecord({ loading }) {
-  const [sourceSystem, setSourceSystem] = useState("");
-  const [recordType, setRecordType] = useState("");
-  const [recordId, setRecordId] = useState("");
-  const [content, setContent] = useState("");
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoading }) {
+  const [sourceSystem, setSourceSystem] = useState("finance-erp");
+  const [recordType, setRecordType] = useState("invoice");
+  const [recordId, setRecordId] = useState("INV-2026-001");
+  const [content, setContent] = useState('{"amount": 14500.0, "currency": "USD", "status": "SETTLED_WIRE"}');
+  const [recordResult, setRecordResult] = useState(null);
+  const [recordError, setRecordError] = useState(null);
+  const [recordLoading, setRecordLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleVerifyRecord = async (e) => {
     e.preventDefault();
-    if (loading) return;
-    setError(null);
-    setResult(null);
+    if (recordLoading || !sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim()) return;
+
+    setRecordError(null);
+    setRecordResult(null);
+    setRecordLoading(true);
 
     let parsedContent;
     try {
@@ -30,97 +33,197 @@ export default function VerifyRecord({ loading }) {
         record_id: recordId.trim(),
         content: parsedContent,
       });
-      setResult(res);
+      setRecordResult(res);
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
-      setError(typeof msg === "string" ? msg : "Verification failed");
+      setRecordError(typeof msg === "string" ? msg : "Verification failed");
+    } finally {
+      setRecordLoading(false);
     }
   };
 
   return (
-    <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/50 overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-800 text-zinc-400">
-          <FiSearch size={16} />
+    <section id="verify" className="w-full max-w-6xl mx-auto px-4 sm:px-8 py-10 border-t border-[#1a1a1a]">
+      {/* Section Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
+        <div>
+          <span className="font-mono text-[11px] font-medium tracking-[0.2em] uppercase text-[#8a8480] block mb-1">
+            CRYPTOGRAPHIC AUDITING
+          </span>
+          <h2 className="font-serif text-2xl sm:text-3xl text-[#f0ece9] font-normal">
+            Verification Studio
+          </h2>
         </div>
-        <span className="text-sm font-medium text-zinc-200">
-          Verify External Record
-        </span>
+        <p className="font-mono text-xs text-[#8a8480] max-w-md">
+          Validate full hash chain continuity or match external live database records against registered on-chain proofs.
+        </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="px-5 pb-5 space-y-3">
-        <div className="grid grid-cols-3 gap-3">
-          <input
-            type="text"
-            value={sourceSystem}
-            onChange={(e) => setSourceSystem(e.target.value)}
-            placeholder="Source system"
-            className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
-          />
-          <input
-            type="text"
-            value={recordType}
-            onChange={(e) => setRecordType(e.target.value)}
-            placeholder="Record type"
-            className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
-          />
-          <input
-            type="text"
-            value={recordId}
-            onChange={(e) => setRecordId(e.target.value)}
-            placeholder="Record ID"
-            className="bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-accent/50 transition-colors"
-          />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Full Ledger Chain Verification Card */}
+        <div className="lg:col-span-5 bg-[#0a0a0a] border border-[#242424] rounded-[10px] p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 pb-4 mb-5 border-b border-[#1f1f1f]">
+              <FiShield className="w-4 h-4 text-[#c9793f]" />
+              <span className="font-mono text-xs uppercase tracking-wider text-[#f0ece9] font-semibold">
+                Global Ledger Integrity
+              </span>
+            </div>
+
+            <p className="text-xs text-[#b8b2ae] leading-relaxed mb-6">
+              Traverses every proof block from Genesis to tip. Computes dual SHA-256 links (<code className="text-[#c9793f]">previous_ledger_hash</code> and <code className="text-[#c9793f]">previous_version_hash</code>) to certify zero tampering.
+            </p>
+
+            {ledgerResult && (
+              <div
+                className={`p-4 rounded-[6px] border mb-6 ${
+                  ledgerResult.valid
+                    ? "bg-emerald-950/30 border-emerald-800/60 text-emerald-300"
+                    : "bg-red-950/30 border-red-800/60 text-red-300"
+                }`}
+              >
+                <div className="flex items-center gap-2 font-mono text-xs font-semibold mb-1">
+                  {ledgerResult.valid ? (
+                    <FiCheckCircle className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <FiAlertTriangle className="w-4 h-4 text-red-400" />
+                  )}
+                  <span>{ledgerResult.message}</span>
+                </div>
+                <div className="font-mono text-[11px] opacity-80 pl-6">
+                  {ledgerResult.total_records} proofs audited ·{" "}
+                  {ledgerResult.valid ? "0 anomalies" : `compromised at block #${ledgerResult.tampered_at}`}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={onRunFullVerify}
+            disabled={ledgerLoading}
+            className="w-full flex items-center justify-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-black bg-[#f0ece9] hover:bg-white py-3.5 rounded-[6px] transition-all disabled:opacity-40 shadow-[0_0_15px_rgba(201,121,63,0.2)]"
+          >
+            {ledgerLoading ? (
+              <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <FiShield className="w-4 h-4" />
+            )}
+            <span>Execute Full Ledger Audit</span>
+          </button>
         </div>
 
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Current external content to verify against"
-          rows={3}
-          className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 resize-none focus:outline-none focus:border-accent/50 transition-colors font-mono"
-        />
-
-        <button
-          type="submit"
-          disabled={!sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim() || loading}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-zinc-800 bg-zinc-800/40 text-sm font-medium text-zinc-200 hover:bg-zinc-800 hover:border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-        >
-          {loading ? (
-            <span className="w-4 h-4 border-2 border-zinc-400/30 border-t-zinc-400 rounded-full animate-spin" />
-          ) : (
-            <FiSearch size={14} />
-          )}
-          Verify
-        </button>
-
-        {error && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-tampered/20 bg-tampered/5 text-xs text-tampered">
-            <FiAlertTriangle size={12} className="shrink-0" />
-            {error}
+        {/* External Record Verification Card */}
+        <div className="lg:col-span-7 bg-[#0a0a0a] border border-[#242424] rounded-[10px] p-6">
+          <div className="flex items-center gap-2 pb-4 mb-5 border-b border-[#1f1f1f]">
+            <FiSearch className="w-4 h-4 text-[#c9793f]" />
+            <span className="font-mono text-xs uppercase tracking-wider text-[#f0ece9] font-semibold">
+              External Live Record Validator
+            </span>
           </div>
-        )}
 
-        {result && (
-          <div className={`flex items-start gap-2 px-3 py-2.5 rounded-lg border text-xs ${
-            result.valid
-              ? "border-valid/20 bg-valid/5 text-valid"
-              : "border-tampered/20 bg-tampered/5 text-tampered"
-          }`}>
-            {result.valid ? (
-              <FiCheckCircle size={14} className="shrink-0 mt-0.5" />
-            ) : (
-              <FiAlertTriangle size={14} className="shrink-0 mt-0.5" />
-            )}
-            <div className="space-y-1">
-              <p className="font-medium">{result.message}</p>
-              <p className="opacity-60 font-mono text-[10px]">
-                v{result.latest_version} &middot; expected {result.expected_hash?.slice(0, 16)}... &middot; got {result.actual_hash?.slice(0, 16)}...
-              </p>
+          <form onSubmit={handleVerifyRecord} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block font-mono text-[10px] text-[#8a8480] uppercase mb-1">Source System</label>
+                <input
+                  type="text"
+                  required
+                  value={sourceSystem}
+                  onChange={(e) => setSourceSystem(e.target.value)}
+                  className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] px-3 py-2 font-mono text-xs text-[#f0ece9] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] text-[#8a8480] uppercase mb-1">Record Type</label>
+                <input
+                  type="text"
+                  required
+                  value={recordType}
+                  onChange={(e) => setRecordType(e.target.value)}
+                  className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] px-3 py-2 font-mono text-xs text-[#f0ece9] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block font-mono text-[10px] text-[#8a8480] uppercase mb-1">Record ID</label>
+                <input
+                  type="text"
+                  required
+                  value={recordId}
+                  onChange={(e) => setRecordId(e.target.value)}
+                  className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] px-3 py-2 font-mono text-xs text-[#f0ece9] focus:outline-none"
+                />
+              </div>
             </div>
-          </div>
-        )}
-      </form>
-    </div>
+
+            <div>
+              <label className="block font-mono text-[10px] text-[#8a8480] uppercase mb-1">
+                Current External Record Payload to Test:
+              </label>
+              <textarea
+                required
+                rows={3}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[6px] p-3 font-mono text-xs text-[#f0ece9] focus:outline-none resize-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={recordLoading}
+              className="w-full flex items-center justify-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-[#b8b2ae] hover:text-[#f0ece9] bg-[#111111] hover:bg-[#161616] border border-[#242424] hover:border-[#383838] py-3 rounded-[6px] transition-colors"
+            >
+              {recordLoading ? (
+                <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+              ) : (
+                <FiSearch className="w-3.5 h-3.5 text-[#c9793f]" />
+              )}
+              <span>Compare Live Payload with Ledger Proof</span>
+            </button>
+
+            {recordError && (
+              <div className="p-3 bg-red-950/30 border border-red-800/60 rounded-[6px] text-xs font-mono text-red-300">
+                {recordError}
+              </div>
+            )}
+
+            {recordResult && (
+              <div
+                className={`p-4 rounded-[6px] border font-mono text-xs space-y-2 ${
+                  recordResult.valid
+                    ? "bg-emerald-950/20 border-emerald-800/60 text-emerald-300"
+                    : "bg-red-950/20 border-red-800/60 text-red-300"
+                }`}
+              >
+                <div className="flex items-center gap-2 font-semibold">
+                  {recordResult.valid ? (
+                    <FiCheckCircle className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <FiAlertTriangle className="w-4 h-4 text-red-400" />
+                  )}
+                  <span>{recordResult.message} (Version #{recordResult.latest_version})</span>
+                </div>
+
+                <div className="space-y-1 text-[11px] pt-1 border-t border-[#1f1f1f]">
+                  <div className="flex items-center justify-between text-[#8a8480]">
+                    <span>Expected On-Chain Hash:</span>
+                    <span className="text-[#b8b2ae] truncate max-w-[240px] select-all">
+                      {recordResult.expected_hash}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#8a8480]">Computed Live Hash:</span>
+                    <span className={`truncate max-w-[240px] select-all ${recordResult.valid ? "text-emerald-400" : "text-red-400"}`}>
+                      {recordResult.actual_hash}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </form>
+        </div>
+      </div>
+    </section>
   );
 }
+

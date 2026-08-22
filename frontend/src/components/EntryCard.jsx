@@ -1,110 +1,157 @@
-import { FiDatabase, FiTag, FiHash, FiClock, FiLink2, FiLayers } from "react-icons/fi";
+import { useState } from "react";
+import { FiDatabase, FiTag, FiHash, FiClock, FiLayers, FiCopy, FiCheck, FiChevronDown, FiChevronUp } from "react-icons/fi";
 
-function truncateHash(hash, chars = 12) {
+function truncateHash(hash, chars = 10) {
   if (!hash) return "—";
   if (hash.length <= chars * 2) return hash;
   return `${hash.slice(0, chars)}...${hash.slice(-chars)}`;
 }
 
-function timeAgo(timestamp) {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
+export default function EntryCard({ record, tampered }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(null);
 
-export default function EntryCard({ record, tampered, isLast }) {
-  const borderColor = tampered
-    ? "border-tampered/40 bg-tampered/5"
-    : "border-zinc-800/60 bg-zinc-900/50";
+  const copyText = (text, key) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 1800);
+  };
 
   return (
-    <div className="relative">
-      {!isLast && (
-        <div className="absolute left-6 top-full w-px h-4 bg-zinc-800" />
-      )}
-
-      <div className={`rounded-xl border ${borderColor} overflow-hidden transition-colors`}>
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/40">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-zinc-500">#{record.id}</span>
-            <span className="text-[10px] font-medium uppercase tracking-wider text-accent/70 bg-accent/10 px-2 py-0.5 rounded">
-              v{record.version_number}
+    <div
+      className={`bg-[#0a0a0a] border rounded-[8px] transition-all duration-200 ${
+        tampered
+          ? "border-red-600/70 bg-red-950/20 shadow-[0_0_15px_rgba(239,68,68,0.15)]"
+          : "border-[#1f1f1f] hover:border-[#2e2e2e]"
+      }`}
+    >
+      {/* Top Banner Row */}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-[#161616]">
+        <div className="flex items-center gap-2.5">
+          <span className="font-mono text-xs font-semibold text-[#f0ece9]">
+            #{record.id}
+          </span>
+          <span className="font-mono text-[10px] font-medium text-[#c9793f] bg-[#1a1410] px-2 py-0.5 rounded border border-[#8a5730]/40">
+            v{record.version_number}
+          </span>
+          {tampered && (
+            <span className="font-mono text-[10px] font-semibold uppercase text-red-400 bg-red-950 px-2 py-0.5 rounded border border-red-800/60">
+              TAMPERED
             </span>
-            {tampered && (
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-tampered bg-tampered/10 px-2 py-0.5 rounded">
-                Tampered
-              </span>
-            )}
-          </div>
-          <span className="text-xs text-zinc-500 font-mono">
-            {timeAgo(record.timestamp)}
+          )}
+        </div>
+
+        <div className="flex items-center gap-3 text-xs text-[#8a8480] font-mono">
+          <span className="flex items-center gap-1">
+            <FiClock className="w-3 h-3 text-[#5a5654]" />
+            <span>{new Date(record.timestamp).toLocaleTimeString()}</span>
           </span>
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="px-5 py-4 space-y-3">
-          {/* Identity */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
-            <IdentityBadge icon={<FiDatabase size={11} />} label={record.source_system} />
-            <IdentityBadge icon={<FiTag size={11} />} label={record.record_type} />
-            <IdentityBadge icon={<FiHash size={11} />} label={record.record_id} accent />
+      {/* Main Content Info */}
+      <div className="p-5 space-y-4">
+        {/* Identity pills */}
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
+          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded border border-[#1f1f1f] text-[#f0ece9]">
+            <FiHash className="w-3.5 h-3.5 text-[#c9793f]" />
+            <span className="font-medium">{record.record_id}</span>
           </div>
 
-          {/* Metadata */}
-          {record.metadata && (
-            <div className="flex items-start gap-2 text-xs">
-              <FiLayers size={11} className="shrink-0 text-zinc-500 mt-0.5" />
-              <span className="font-mono text-zinc-400 break-all leading-relaxed">
-                {typeof record.metadata === "string"
-                  ? record.metadata
-                  : JSON.stringify(record.metadata)}
-              </span>
-            </div>
-          )}
-
-          {/* Hashes */}
-          <div className="space-y-1.5 pt-2 border-t border-zinc-800/40">
-            <HashRow label="content" value={record.content_hash} />
-            <HashRow label="prev ver" value={record.previous_version_hash} />
-            <HashRow label="prev led" value={truncateHash(record.previous_ledger_hash, 16)} />
-            <HashRow label="entry" value={record.entry_hash} highlight />
+          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded border border-[#1f1f1f] text-[#b8b2ae]">
+            <FiDatabase className="w-3.5 h-3.5 text-[#8a8480]" />
+            <span>{record.source_system}</span>
           </div>
 
-          {/* Timestamp */}
-          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-            <FiClock size={11} />
-            <span className="font-mono">{record.timestamp}</span>
+          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded border border-[#1f1f1f] text-[#b8b2ae]">
+            <FiTag className="w-3.5 h-3.5 text-[#8a8480]" />
+            <span>{record.record_type}</span>
           </div>
         </div>
+
+        {/* Cryptographic Hashes Grid */}
+        <div className="space-y-2 bg-[#080808] p-3.5 rounded-[6px] border border-[#161616] font-mono text-xs">
+          {/* Entry Hash */}
+          <div className="flex items-center justify-between">
+            <span className="text-[#c9793f] font-semibold flex items-center gap-1">
+              <span>entry_hash:</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[#f0ece9] select-all">
+                {truncateHash(record.entry_hash, 14)}
+              </span>
+              <button
+                onClick={() => copyText(record.entry_hash, `entry-${record.id}`)}
+                className="p-1 rounded bg-[#111111] hover:bg-[#1f1f1f] text-[#8a8480] hover:text-[#f0ece9] transition-colors"
+                title="Copy Full Hash"
+              >
+                {copiedKey === `entry-${record.id}` ? (
+                  <FiCheck className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <FiCopy className="w-3 h-3" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Content Hash */}
+          <div className="flex items-center justify-between text-[#8a8480]">
+            <span>content_hash:</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[#b8b2ae] select-all">
+                {truncateHash(record.content_hash, 14)}
+              </span>
+              <button
+                onClick={() => copyText(record.content_hash, `content-${record.id}`)}
+                className="p-1 rounded bg-[#111111] hover:bg-[#1f1f1f] text-[#8a8480] hover:text-[#f0ece9] transition-colors"
+                title="Copy Full Hash"
+              >
+                {copiedKey === `content-${record.id}` ? (
+                  <FiCheck className="w-3 h-3 text-emerald-400" />
+                ) : (
+                  <FiCopy className="w-3 h-3" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Previous Ledger Hash */}
+          <div className="flex items-center justify-between text-[#5a5654] text-[11px]">
+            <span>previous_ledger_hash:</span>
+            <span>{record.previous_ledger_hash ? truncateHash(record.previous_ledger_hash, 12) : "GENESIS"}</span>
+          </div>
+
+          {/* Previous Version Hash */}
+          {record.previous_version_hash && (
+            <div className="flex items-center justify-between text-[#5a5654] text-[11px]">
+              <span>previous_version_hash:</span>
+              <span>{truncateHash(record.previous_version_hash, 12)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Expandable Metadata & Raw View */}
+        {record.metadata && Object.keys(record.metadata).length > 0 && (
+          <div>
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="flex items-center gap-1.5 font-mono text-[11px] text-[#8a8480] hover:text-[#f0ece9] transition-colors"
+            >
+              <FiLayers className="w-3.5 h-3.5 text-[#c9793f]" />
+              <span>Metadata & Details</span>
+              {expanded ? <FiChevronUp className="w-3.5 h-3.5" /> : <FiChevronDown className="w-3.5 h-3.5" />}
+            </button>
+
+            {expanded && (
+              <pre className="mt-2 p-3 bg-[#080808] border border-[#161616] rounded-[6px] text-xs font-mono text-[#b8b2ae] overflow-x-auto">
+                {JSON.stringify(record.metadata, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function IdentityBadge({ icon, label, accent }) {
-  return (
-    <span className={`flex items-center gap-1 ${accent ? "text-zinc-200 font-medium" : "text-zinc-500"}`}>
-      {icon}
-      {label}
-    </span>
-  );
-}
-
-function HashRow({ label, value, highlight }) {
-  if (!value) return null;
-  return (
-    <div className="flex items-start gap-2 text-xs">
-      <span className={`shrink-0 font-mono font-medium w-16 ${highlight ? "text-accent/70" : "text-zinc-500"}`}>
-        {label}:
-      </span>
-      <span className="font-mono text-zinc-500 break-all leading-relaxed">
-        {truncateHash(value, 16)}
-      </span>
-    </div>
-  );
-}

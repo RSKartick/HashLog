@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import Header from "./components/Header.jsx";
 import Hero from "./components/Hero.jsx";
+import StatsBar from "./components/StatsBar.jsx";
+import ChainVisualization from "./components/ChainVisualization.jsx";
+import TamperLab from "./components/TamperLab.jsx";
 import AddEntry from "./components/AddEntry.jsx";
-import FileUpload from "./components/FileUpload.jsx";
 import VerifyRecord from "./components/VerifyRecord.jsx";
-import VerifyButton from "./components/VerifyButton.jsx";
 import CheckpointButton from "./components/CheckpointButton.jsx";
 import EntryList from "./components/EntryList.jsx";
-import ChainVisualization from "./components/ChainVisualization.jsx";
 import StatusBar from "./components/StatusBar.jsx";
 import {
   listRecords,
@@ -15,9 +15,11 @@ import {
   importRecords,
   verifyLedger,
   healthCheck,
+  exportLedger,
   getMockRecords,
   getMockVerification,
   getMockHealth,
+  sha256,
 } from "./api.js";
 
 export default function App() {
@@ -27,6 +29,13 @@ export default function App() {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState({ entry: false, verify: false, upload: false });
   const [mockMode, setMockMode] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [checkpointsCount, setCheckpointsCount] = useState(1);
+
+  const showToast = (message) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const fetchRecords = useCallback(async () => {
     try {
@@ -54,77 +63,97 @@ export default function App() {
     fetchHealth();
   }, [fetchRecords, fetchHealth]);
 
-  const handleRegister = async ({ source_system, record_type, record_id, content }) => {
+  // Single record register handler
+  const handleRegister = async ({ source_system, record_type, record_id, content, metadata }) => {
     setLoading((s) => ({ ...s, entry: true }));
     try {
-      await registerRecord({ source_system, record_type, record_id, content });
+      await registerRecord({ source_system, record_type, record_id, content, metadata });
       await fetchRecords();
       setVerifyResult(null);
       setTamperedIds(new Set());
+      showToast(`Proof registered for ${record_id}`);
     } catch {
       if (mockMode) {
         const prev = records[records.length - 1];
-        const hash = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        const contentHash = await sha256(content);
+        const entryHash = await sha256(`${prev ? prev.entry_hash : "GENESIS"}|${source_system}|${record_type}|${record_id}|${contentHash}`);
+        
+        // Find existing record version if any
+        const existingVersions = records.filter(
+          (r) => r.source_system === source_system && r.record_type === record_type && r.record_id === record_id
+        );
+        const versionNumber = existingVersions.length + 1;
+        const prevVerHash = existingVersions.length > 0 ? existingVersions[existingVersions.length - 1].entry_hash : null;
+
         const newRecord = {
           id: records.length + 1,
           source_system,
           record_type,
           record_id,
-          version_number: 1,
-          content_hash: Math.random().toString(36).slice(2),
-          entry_hash: hash,
-          previous_version_hash: null,
+          version_number: versionNumber,
+          content_hash: contentHash,
+          entry_hash: entryHash,
+          previous_version_hash: prevVerHash,
           previous_ledger_hash: prev ? prev.entry_hash : "GENESIS",
           timestamp: Date.now(),
-          metadata: null,
+          metadata: metadata || null,
           created_at: new Date().toISOString(),
         };
+
         setRecords((r) => [...r, newRecord]);
-        setHealth((h) => h ? { ...h, total_hash_records: h.total_hash_records + 1 } : getMockHealth());
+        setHealth((h) => (h ? { ...h, total_hash_records: h.total_hash_records + 1 } : getMockHealth()));
+        showToast(`[Mock] Proof registered for ${record_id}`);
       }
     } finally {
       setLoading((s) => ({ ...s, entry: false }));
     }
   };
 
-  const handleFileUpload = async ({ source_system, record_type, records: importRecords }) => {
+  // Batch import handler
+  const handleBatchImport = async ({ source_system, record_type, records: batchItems }) => {
     setLoading((s) => ({ ...s, upload: true }));
     try {
-      await importRecords({ source_system, record_type, records: importRecords });
+      await importRecords({ source_system, record_type, records: batchItems });
       await fetchRecords();
       setVerifyResult(null);
       setTamperedIds(new Set());
+      showToast(`Batch of ${batchItems.length} records imported`);
     } catch {
       if (mockMode) {
-        setRecords((prev) => {
-          const next = [...prev];
-          let lastHash = next.length > 0 ? next[next.length - 1].entry_hash : "GENESIS";
-          importRecords.forEach((rec, i) => {
-            const hash = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-            next.push({
-              id: next.length + 1,
-              source_system,
-              record_type,
-              record_id: rec.record_id,
-              version_number: 1,
-              content_hash: Math.random().toString(36).slice(2),
-              entry_hash: hash,
-              previous_version_hash: null,
-              previous_ledger_hash: lastHash,
-              timestamp: Date.now() + i,
-              metadata: rec.metadata || null,
-              created_at: new Date().toISOString(),
-            });
-            lastHash = hash;
-          });
-          return next;
-        });
+        let currentChain = [...records];
+        let lastHash = currentChain.length > 0 ? currentChain[currentChain.length - 1].entry_hash : "GENESIS";
+
+        for (let i = 0; i < batchItems.length; i++) {
+          const item = batchItems[i];
+          const cHash = await sha256(item.content);
+          const eHash = await sha256(`${lastHash}|${source_system}|${record_type}|${item.record_id}|${cHash}`);
+          const newBlock = {
+            id: currentChain.length + 1,
+            source_system,
+            record_type,
+            record_id: item.record_id,
+            version_number: 1,
+            content_hash: cHash,
+            entry_hash: eHash,
+            previous_version_hash: null,
+            previous_ledger_hash: lastHash,
+            timestamp: Date.now() + i * 100,
+            metadata: item.metadata || null,
+            created_at: new Date().toISOString(),
+          };
+          currentChain.push(newBlock);
+          lastHash = eHash;
+        }
+
+        setRecords(currentChain);
+        showToast(`[Mock] Batch of ${batchItems.length} records imported`);
       }
     } finally {
       setLoading((s) => ({ ...s, upload: false }));
     }
   };
 
+  // Run full ledger verification
   const handleVerifyLedger = async () => {
     setLoading((s) => ({ ...s, verify: true }));
     try {
@@ -146,41 +175,138 @@ export default function App() {
     }
   };
 
+  // Simulate tampering in the lab
+  const handleSimulateTamper = (targetId) => {
+    const ids = new Set();
+    for (let i = targetId; i <= records.length; i++) {
+      ids.add(i);
+    }
+    setTamperedIds(ids);
+    setVerifyResult({
+      valid: false,
+      tampered_at: targetId,
+      total_records: records.length,
+      message: `Cryptographic failure detected: Hash mismatch at Block #${targetId}`,
+    });
+    showToast(`Simulation: Tampering applied to Block #${targetId}`);
+  };
+
+  // Reset tampering
+  const handleResetTamper = () => {
+    setTamperedIds(new Set());
+    setVerifyResult({
+      valid: true,
+      total_records: records.length,
+      message: "Ledger is valid and clean",
+    });
+    showToast("Clean ledger state restored");
+  };
+
+  // Export JSON ledger
+  const handleExport = async () => {
+    try {
+      let dataToExport = records;
+      try {
+        dataToExport = await exportLedger();
+      } catch {
+        dataToExport = records;
+      }
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(dataToExport, null, 2)
+      )}`;
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", jsonString);
+      downloadAnchor.setAttribute("download", `hashlog-ledger-${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      showToast("Ledger JSON export downloaded");
+    } catch {
+      showToast("Export failed");
+    }
+  };
+
+  const latestHash = records.length > 0 ? records[records.length - 1].entry_hash : null;
+
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <Header entryCount={records.length} chainValid={verifyResult?.valid ?? null} />
+    <div className="min-h-screen bg-[#000000] text-[#f0ece9]">
+      {/* Fixed Header */}
+      <Header
+        entryCount={records.length}
+        chainValid={verifyResult?.valid ?? null}
+        onExport={handleExport}
+      />
 
-      <Hero recordCount={records.length} />
+      {/* Hero Section */}
+      <Hero
+        recordCount={records.length}
+        latestHash={latestHash}
+        onVerifyClick={handleVerifyLedger}
+      />
 
-      <main id="actions" className="mx-auto max-w-3xl px-6 pb-12 space-y-6">
-        {mockMode && (
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-zinc-700/40 bg-zinc-900/40 text-xs text-zinc-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-            <span>
-              Backend offline — using local mock data. Start the API to persist records.
-            </span>
-          </div>
-        )}
+      {/* Toast Notification */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#111111] border border-[#2e2e2e] text-[#f0ece9] px-4 py-2.5 rounded-[6px] shadow-2xl font-mono text-xs flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#c9793f]" />
+          <span>{toast}</span>
+        </div>
+      )}
 
-        <AddEntry onSubmit={handleRegister} loading={loading.entry} />
-        <FileUpload onUpload={handleFileUpload} loading={loading.upload} />
+      {/* Telemetry Overview */}
+      <StatsBar
+        recordCount={records.length}
+        verifyResult={verifyResult}
+        latestHash={latestHash}
+        checkpointsCount={checkpointsCount}
+        mockMode={mockMode}
+      />
 
+      {/* Main Studio Components */}
+      <main className="space-y-4">
+        {/* Visual Proof Chain Graph */}
         <ChainVisualization records={records} tamperedIds={tamperedIds} />
 
-        <VerifyButton
-          onClick={handleVerifyLedger}
-          loading={loading.verify}
-          result={verifyResult}
+        {/* Interactive Tamper Lab */}
+        <TamperLab
+          records={records}
+          onSimulateTamper={handleSimulateTamper}
+          onResetTamper={handleResetTamper}
+          tamperedIds={tamperedIds}
         />
 
-        <VerifyRecord loading={loading.verify} />
+        {/* Register & Batch Ingest Studio */}
+        <AddEntry
+          onSubmit={handleRegister}
+          onBatchSubmit={handleBatchImport}
+          loading={loading.entry || loading.upload}
+        />
 
-        <CheckpointButton />
+        {/* Verification Studio */}
+        <VerifyRecord
+          onRunFullVerify={handleVerifyLedger}
+          ledgerResult={verifyResult}
+          ledgerLoading={loading.verify}
+        />
 
+        {/* Checkpoints Studio */}
+        <CheckpointButton
+          onCheckpointAdded={() => setCheckpointsCount((c) => c + 1)}
+        />
+
+        {/* Full Immutable Audit Explorer */}
         <EntryList records={records} tamperedIds={tamperedIds} />
-
-        <StatusBar health={health} onRefresh={() => { fetchRecords(); fetchHealth(); }} />
       </main>
+
+      {/* Footer Status Bar */}
+      <StatusBar
+        health={health}
+        mockMode={mockMode}
+        onRefresh={() => {
+          fetchRecords();
+          fetchHealth();
+        }}
+      />
     </div>
   );
 }
+
