@@ -575,6 +575,7 @@ HashLog/
 │           ├── Hero.jsx               # Editorial headline & connected node visualizer
 │           ├── StatsBar.jsx           # Linked telemetry busbar & system overview
 │           ├── ChainVisualization.jsx # Dual-lineage graph with connected blockchain flow
+│           ├── Timeline.jsx           # Chronological trust timeline linking records & snapshots
 │           ├── TamperLab.jsx          # Interactive mutation simulator & hex diff
 │           ├── AddEntry.jsx           # Single & batch proof ingestion terminal
 │           ├── VerifyRecord.jsx       # External content drift verification studio
