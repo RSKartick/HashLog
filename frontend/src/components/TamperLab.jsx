@@ -5,10 +5,11 @@ import { simulateTamper, revertTamper, listCheckpoints, verifyCheckpoint } from 
 export default function TamperLab({ records, onTamperApplied, onMessage }) {
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [tamperedId, setTamperedId] = useState(null);
+  const [tamperedIds, setTamperedIds] = useState(new Set());
   const [attackReport, setAttackReport] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const selectedRecord = records.find((record) => String(record.id) === selectedId);
+  const breachActive = tamperedIds.size > 0;
 
   const displayContent = (value) => typeof value === "string" ? value : JSON.stringify(value ?? "", null, 2);
 
@@ -19,12 +20,17 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
 
   const applyTamper = async () => {
     if (!selectedRecord) return;
+    if (breachActive) {
+      onMessage?.("Restore the current breach before starting another attack");
+      return;
+    }
     setLoading(true);
+    setTimeline([]);
     const trustedHash = selectedRecord.content_hash;
     try {
       addTimeline("Record modified", "warning");
       const result = await simulateTamper(selectedRecord.id);
-      setTamperedId(selectedRecord.id);
+      setTamperedIds(new Set([selectedRecord.id]));
       const originalContent = displayContent(selectedRecord.raw_content);
       const tamperedContent = "[TAMPERED DATABASE CONTENT]";
       const originalLines = originalContent.split(/\r?\n/);
@@ -54,14 +60,22 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
   };
 
   const revert = async () => {
-    if (!tamperedId) return;
+    if (!breachActive || loading) return;
     setLoading(true);
     try {
-      const result = await revertTamper(tamperedId);
-      setTamperedId(null);
+      const results = await Promise.all(
+        Array.from(tamperedIds).map((id) => revertTamper(id).catch((error) => ({ error, id })))
+      );
+      const failures = results.filter((item) => item?.error);
+      setTamperedIds(new Set());
       setAttackReport(null);
-      addTimeline("Original proof restored", "success");
-      onMessage?.(result.message);
+      if (failures.length === 0) {
+        addTimeline("Original proof restored", "success");
+        onMessage?.("Original proof restored");
+      } else {
+        addTimeline("Some proofs could not be restored — refresh and retry", "danger");
+        onMessage?.(failures[0].error?.response?.data?.detail || "Could not revert every tamper");
+      }
       await onTamperApplied?.();
     } catch (error) {
       onMessage?.(error?.response?.data?.detail || "Could not revert tamper");
@@ -79,9 +93,9 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
         </div>
         <p className="font-mono text-xs text-[#8a8480] max-w-3xl">Simulates an unknown database edit by corrupting one stored proof hash. The audit then detects the mismatch and breaks the ledger link.</p>
         <div className="flex flex-col sm:flex-row gap-3">
-          <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)} className="flex-1 bg-[#080808] border border-[#2e2e2e] rounded-[4px] px-3 py-2 font-mono text-xs text-[#f0ece9]"><option value="">Choose a proof block to attack</option>{records.map((record) => <option key={record.id} value={record.id}>#{record.id} — {record.record_id} (v{record.version_number})</option>)}</select>
-          <button type="button" disabled={!selectedRecord || loading} onClick={applyTamper} className="inline-flex items-center justify-center gap-2 bg-red-950/60 border border-red-700/80 text-red-200 hover:bg-red-900/70 disabled:opacity-40 px-5 py-2.5 rounded-[4px] font-mono text-xs uppercase font-semibold"><FiZap className="w-3.5 h-3.5" /> {loading ? "Attacking..." : "Simulate tamper attack"}</button>
-          <button type="button" disabled={!tamperedId || loading} onClick={revert} className="inline-flex items-center justify-center gap-2 bg-emerald-950/40 border border-emerald-800/70 text-emerald-300 hover:bg-emerald-900/50 disabled:opacity-40 px-4 py-2.5 rounded-[4px] font-mono text-xs uppercase">Revert true state</button>
+          <select value={breachActive ? "" : selectedId} onChange={(event) => setSelectedId(event.target.value)} disabled={breachActive} className="flex-1 bg-[#080808] border border-[#2e2e2e] rounded-[4px] px-3 py-2 font-mono text-xs text-[#f0ece9] disabled:opacity-50">{breachActive ? <option value="">Breach active on block #{[...tamperedIds].join(", #")} — restore first</option> : <option value="">Choose a proof block to attack</option>}{!breachActive && records.map((record) => <option key={record.id} value={record.id}>#{record.id} — {record.record_id} (v{record.version_number})</option>)}</select>
+          <button type="button" disabled={!selectedRecord || loading || breachActive} onClick={applyTamper} title={breachActive ? "Restore the current breach first" : undefined} className="inline-flex items-center justify-center gap-2 bg-red-950/60 border border-red-700/80 text-red-200 hover:bg-red-900/70 disabled:opacity-40 px-5 py-2.5 rounded-[4px] font-mono text-xs uppercase font-semibold"><FiZap className="w-3.5 h-3.5" /> {loading ? "Attacking..." : "Simulate tamper attack"}</button>
+          <button type="button" disabled={!breachActive || loading} onClick={revert} className="inline-flex items-center justify-center gap-2 bg-emerald-950/40 border border-emerald-800/70 text-emerald-300 hover:bg-emerald-900/50 disabled:opacity-40 px-4 py-2.5 rounded-[4px] font-mono text-xs uppercase">Revert true state</button>
         </div>
 
         {attackReport && <div className="border border-red-700/80 bg-red-950/30 rounded-[5px] p-5 space-y-4 shadow-[0_0_25px_rgba(239,68,68,0.12)]">
