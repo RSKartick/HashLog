@@ -524,7 +524,7 @@ HashLog supports comprehensive environment variable configuration across backend
 | `HASHLOG_RATE_LIMIT_PER_MINUTE` | `120` | Maximum requests per minute per client IP, keyed on the raw socket address (`request.client.host`) — **not** `X-Forwarded-For` aware, so all clients behind the same reverse proxy share one bucket |
 | `HASHLOG_CORS_ORIGINS` | `http://localhost:5173` | Comma-separated list of allowed browser origins |
 | `HASHLOG_SIGNING_SECRET` | `hashlog-local-demo-signing-secret` | Secret key used for HMAC-SHA256 certificate and anchor signatures. Falls back silently to the demo value if unset — **set this explicitly in production**, it does not fail startup on its own |
-| `HASHLOG_ENABLE_TAMPER_TEST` | `false` | Enables `/api/dev/tamper` endpoints for local development demonstrations |
+| `HASHLOG_ENABLE_TAMPER_TEST` | `true` (demo default) | Enables `/api/dev/tamper` endpoints for local development demonstrations. **Set this explicitly to `false` in any shared or production environment** — when enabled, these routes can intentionally corrupt ledger proofs |
 | `TURNSTILE_SECRET_KEY` | `None` | Cloudflare Turnstile secret key for server-side token validation |
 | `VITE_API_BASE_URL` | `/api` | Base API URL consumed by the React frontend |
 | `VITE_API_KEY` | `None` | Optional client API key sent in `X-API-Key` request header |

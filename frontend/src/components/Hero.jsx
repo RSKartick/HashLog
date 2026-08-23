@@ -1,10 +1,17 @@
-import { FiShield, FiArrowRight, FiCheckCircle, FiLock, FiLayers } from "react-icons/fi";
+import { FiShield, FiArrowRight, FiCheckCircle, FiAlertTriangle, FiLock, FiLayers } from "react-icons/fi";
 
 export default function Hero({ recordCount, latestHash, onVerifyClick, isTampered = false }) {
   return (
     <section className="relative min-h-[80vh] flex items-center justify-center pt-28 pb-16 px-4 sm:px-8 overflow-hidden border-b border-[#1a1a1a]">
       {/* Background ambient radial glow */}
-      <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[800px] h-[400px] bg-radial ${isTampered ? "from-red-900/15" : "from-[#c9793f]/10"} via-transparent to-transparent blur-3xl pointer-events-none transition-colors duration-500`} />
+      <div
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] sm:w-[800px] h-[400px] blur-3xl pointer-events-none transition-colors duration-500"
+        style={{
+          background: isTampered
+            ? "radial-gradient(ellipse at center, rgba(185,28,28,0.16) 0%, transparent 65%)"
+            : "radial-gradient(ellipse at center, rgba(201,121,63,0.10) 0%, transparent 65%)",
+        }}
+      />
 
       <div className="w-full max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center relative z-10">
         {/* Left Editorial Content */}
@@ -205,9 +212,15 @@ export default function Hero({ recordCount, latestHash, onVerifyClick, isTampere
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#8a8480]">Ledger State</span>
-                <span className="text-emerald-400 font-medium flex items-center gap-1">
-                  <FiCheckCircle className="w-3 h-3" /> Synchronized
-                </span>
+                {isTampered ? (
+                  <span className="text-red-400 font-medium flex items-center gap-1">
+                    <FiAlertTriangle className="w-3 h-3" /> Compromised
+                  </span>
+                ) : (
+                  <span className="text-emerald-400 font-medium flex items-center gap-1">
+                    <FiCheckCircle className="w-3 h-3" /> Synchronized
+                  </span>
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#8a8480]">Latest Proof Hash</span>

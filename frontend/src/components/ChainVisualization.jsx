@@ -24,6 +24,13 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
     return () => { active = false; };
   }, [inspectBlock]);
 
+  // The API returns records newest-first; render the spine oldest → newest so
+  // genesis links to block #1 and the TIP badge lands on the latest block.
+  const chronologicalRecords = useMemo(
+    () => [...records].sort((a, b) => Number(a.id) - Number(b.id)),
+    [records]
+  );
+
   // Group records by identity for lineage view
   const recordIdentities = useMemo(() => {
     const map = {};
@@ -32,6 +39,9 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
       if (!map[key]) map[key] = [];
       map[key].push(r);
     });
+    Object.values(map).forEach((versions) =>
+      versions.sort((a, b) => a.version_number - b.version_number)
+    );
     return map;
   }, [records]);
 
@@ -148,7 +158,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
               <div className="w-36 bg-[#111111] border border-[#2e2e2e] rounded-[6px] p-4 text-center relative shadow-[0_0_15px_rgba(201,121,63,0.1)]">
                 {/* Outgoing socket pin */}
                 <div className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#000000] ${
-                  records[0] && (tamperedIds.has(records[0].id) || tamperedIds.has(Number(records[0].id)) || tamperedIds.has(String(records[0].id)))
+                  chronologicalRecords[0] && (tamperedIds.has(chronologicalRecords[0].id) || tamperedIds.has(Number(chronologicalRecords[0].id)) || tamperedIds.has(String(chronologicalRecords[0].id)))
                     ? "bg-red-500 shadow-[0_0_10px_#ef4444]"
                     : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
                 }`} />
@@ -169,19 +179,19 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     x2="48"
                     y2="12"
                     stroke={
-                      records[0] &&
-                      (tamperedIds.has(records[0].id) ||
-                        tamperedIds.has(Number(records[0].id)) ||
-                        tamperedIds.has(String(records[0].id)))
+                      chronologicalRecords[0] &&
+                      (tamperedIds.has(chronologicalRecords[0].id) ||
+                        tamperedIds.has(Number(chronologicalRecords[0].id)) ||
+                        tamperedIds.has(String(chronologicalRecords[0].id)))
                         ? "#ef4444"
                         : "#c9793f"
                     }
                     strokeWidth="2"
                     className={
-                      records[0] &&
-                      (tamperedIds.has(records[0].id) ||
-                        tamperedIds.has(Number(records[0].id)) ||
-                        tamperedIds.has(String(records[0].id)))
+                      chronologicalRecords[0] &&
+                      (tamperedIds.has(chronologicalRecords[0].id) ||
+                        tamperedIds.has(Number(chronologicalRecords[0].id)) ||
+                        tamperedIds.has(String(chronologicalRecords[0].id)))
                         ? "opacity-100"
                         : "animate-chain-flow"
                     }
@@ -189,10 +199,10 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                   <polygon
                     points="46,7 56,12 46,17"
                     fill={
-                      records[0] &&
-                      (tamperedIds.has(records[0].id) ||
-                        tamperedIds.has(Number(records[0].id)) ||
-                        tamperedIds.has(String(records[0].id)))
+                      chronologicalRecords[0] &&
+                      (tamperedIds.has(chronologicalRecords[0].id) ||
+                        tamperedIds.has(Number(chronologicalRecords[0].id)) ||
+                        tamperedIds.has(String(chronologicalRecords[0].id)))
                         ? "#ef4444"
                         : "#c9793f"
                     }
@@ -202,15 +212,15 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
             </div>
 
             {/* Block Sequence */}
-            {records.map((record, i) => {
+            {chronologicalRecords.map((record, i) => {
               const isTampered = Boolean(
                 tamperedIds &&
                   (tamperedIds.has(record.id) ||
                     tamperedIds.has(Number(record.id)) ||
                     tamperedIds.has(String(record.id)))
               );
-              const isLatest = i === records.length - 1;
-              const hasNext = i < records.length - 1;
+              const isLatest = i === chronologicalRecords.length - 1;
+              const hasNext = i < chronologicalRecords.length - 1;
 
               return (
                 <div key={record.id} className="flex items-center">

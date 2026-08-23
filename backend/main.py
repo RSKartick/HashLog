@@ -111,7 +111,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -443,11 +443,19 @@ def delete_records_by_file(filename: str) -> dict[str, Any]:
     """Remove all entries belonging to a file and re-seal the ledger."""
     with db_session() as connection:
         connection.execute("BEGIN IMMEDIATE")
-        matching = connection.execute(
-            "SELECT id FROM hash_records WHERE record_id = ? OR metadata LIKE ?",
-            (filename, f'%"{filename}"%'),
+        # LIKE is only a cheap prefilter; confirm the filename matches exactly
+        # so a name appearing inside an unrelated metadata value can't cause
+        # over-deletion.
+        candidates = connection.execute(
+            "SELECT id, record_id, metadata FROM hash_records WHERE record_id = ? OR metadata LIKE ?",
+            (filename, f"%{json.dumps(filename, ensure_ascii=False)}%"),
         ).fetchall()
-        matching_ids = [row["id"] for row in matching]
+        matching_ids = [
+            row["id"]
+            for row in candidates
+            if row["record_id"] == filename
+            or (_parse_metadata(row["metadata"]) or {}).get("filename") == filename
+        ]
         if not matching_ids:
             return {"deleted_count": 0, "message": f"No entries found for {filename}"}
 

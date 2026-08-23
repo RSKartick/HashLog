@@ -112,11 +112,6 @@ export default function App() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchRecords();
-    fetchHealth();
-  }, [fetchRecords, fetchHealth]);
-
   const handleRegister = async ({ source_system, record_type, record_id, content, metadata }) => {
     setLoading((s) => ({ ...s, entry: true }));
     try {
@@ -184,7 +179,7 @@ export default function App() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      const list = await fetchRecords();
+      const [list] = await Promise.all([fetchRecords(), fetchHealth()]);
       if (!alive || list.length === 0) return;
       await runAudit(list); // accurate Integrity Status on first paint
     })();
@@ -192,7 +187,7 @@ export default function App() {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchRecords]);
+  }, [fetchRecords, fetchHealth]);
 
   const handleExport = async () => {
     try {
@@ -259,7 +254,8 @@ export default function App() {
     rememberSnapshot(sourceSystem, recordType, recordId, content);
   };
 
-  const latestHash = records.length > 0 ? records[records.length - 1].entry_hash : null;
+  // The API returns records newest-first, so the chain tip is the first row.
+  const latestHash = records.length > 0 ? records[0].entry_hash : null;
   const isLedgerTampered = Boolean(verifyResult && !verifyResult.valid) || tamperedIds.size > 0;
 
   return (

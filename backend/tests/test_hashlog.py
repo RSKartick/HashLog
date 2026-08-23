@@ -15,7 +15,9 @@ from backend.main import app
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     test_database = tmp_path / "hashlog-test.db"
+    test_raw_database = tmp_path / "raw-hashlog-test.db"
     monkeypatch.setattr(database, "DATABASE_PATH", test_database)
+    monkeypatch.setattr(database, "RAW_DATABASE_PATH", test_raw_database)
     with TestClient(app) as test_client:
         yield test_client
 

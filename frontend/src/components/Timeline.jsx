@@ -5,6 +5,15 @@ import { listCheckpoints } from "../api.js";
 const hhmm = (ms) =>
   new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 
+// SQLite CURRENT_TIMESTAMP looks like "2026-08-23 07:09:00" (UTC, space
+// separated). Date.parse only guarantees ISO support, so normalize it.
+const parseDbTimestamp = (value) => {
+  if (typeof value !== "string" || value.trim() === "") return NaN;
+  const normalized = value.includes("T") ? value : `${value.trim().replace(" ", "T")}`;
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  return Date.parse(hasZone ? normalized : `${normalized}Z`);
+};
+
 export default function Timeline({ records }) {
   const [checkpoints, setCheckpoints] = useState([]);
 
@@ -27,7 +36,7 @@ export default function Timeline({ records }) {
     })),
     ...checkpoints.map((c) => ({
       id: `c${c.id}`,
-      time: Date.parse(c.created_at),
+      time: parseDbTimestamp(c.created_at),
       label: "Checkpoint anchored",
       detail: `snapshot #${c.id} · root ${String(c.ledger_hash ?? "").slice(0, 10)}…`,
     })),

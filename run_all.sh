@@ -18,7 +18,18 @@ export TMP="$TEST_TMP"
 echo "========================================"
 echo " HashLog: backend tests"
 echo "========================================"
-python -m pytest -q -p no:cacheprovider backend/tests
+if [ -x "$PROJECT_ROOT/backend/.venv/bin/python" ]; then
+  PYTHON="$PROJECT_ROOT/backend/.venv/bin/python"
+else
+  PYTHON="$(command -v python3 || command -v python)"
+fi
+
+if ! "$PYTHON" -c "import pytest, httpx" >/dev/null 2>&1; then
+  echo "Installing backend dev dependencies into $PYTHON ..."
+  "$PYTHON" -m pip install -q -r backend/requirements-dev.txt
+fi
+
+"$PYTHON" -m pytest -q -p no:cacheprovider backend/tests
 
 echo
 echo "========================================"
