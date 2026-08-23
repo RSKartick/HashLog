@@ -391,6 +391,127 @@ def record_content(record_db_id: int) -> dict[str, Any]:
     }
 
 
+def _rebuild_ledger_chain(connection: sqlite3.Connection) -> None:
+    """Recomputes and updates all previous_ledger_hash, previous_version_hash, and entry_hash in order."""
+    rows = connection.execute("SELECT * FROM hash_records ORDER BY id ASC").fetchall()
+    if not rows:
+        connection.execute("DELETE FROM checkpoints")
+        try:
+            connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('hash_records', 'checkpoints')")
+        except sqlite3.OperationalError:
+            pass
+        return
+
+    expected_ledger = GENESIS_HASH
+    latest_by_identity: dict[tuple[str, str, str], dict[str, Any]] = {}
+
+    for row in rows:
+        identity = (row["source_system"], row["record_type"], row["record_id"])
+        previous_for_record = latest_by_identity.get(identity)
+        version_number = (previous_for_record["version_number"] + 1) if previous_for_record else 1
+        previous_version_hash = previous_for_record["entry_hash"] if previous_for_record else None
+        previous_ledger_hash = expected_ledger
+
+        computed_entry = compute_entry_hash(
+            previous_version_hash=previous_version_hash,
+            previous_ledger_hash=previous_ledger_hash,
+            source_system=row["source_system"],
+            record_type=row["record_type"],
+            record_id=row["record_id"],
+            version_number=version_number,
+            content_hash=row["content_hash"],
+            timestamp=row["timestamp"],
+        )
+
+        connection.execute(
+            """
+            UPDATE hash_records
+            SET version_number = ?, previous_version_hash = ?, previous_ledger_hash = ?, entry_hash = ?
+            WHERE id = ?
+            """,
+            (version_number, previous_version_hash, previous_ledger_hash, computed_entry, row["id"]),
+        )
+        expected_ledger = computed_entry
+        latest_by_identity[identity] = {
+            "version_number": version_number,
+            "entry_hash": computed_entry,
+        }
+
+
+@app.delete("/api/records/file/{filename:path}")
+def delete_records_by_file(filename: str) -> dict[str, Any]:
+    """Remove all entries belonging to a file and re-seal the ledger."""
+    with db_session() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        matching = connection.execute(
+            "SELECT id FROM hash_records WHERE record_id = ? OR metadata LIKE ?",
+            (filename, f'%"{filename}"%'),
+        ).fetchall()
+        matching_ids = [row["id"] for row in matching]
+        if not matching_ids:
+            return {"deleted_count": 0, "message": f"No entries found for {filename}"}
+
+        placeholders = ",".join("?" for _ in matching_ids)
+        connection.execute(
+            f"DELETE FROM hash_records WHERE id IN ({placeholders})", matching_ids
+        )
+        _rebuild_ledger_chain(connection)
+        connection.commit()
+
+    with raw_db_session() as raw_connection:
+        raw_connection.execute(
+            f"DELETE FROM raw_logs WHERE record_db_id IN ({placeholders})", matching_ids
+        )
+        raw_connection.execute(
+            f"DELETE FROM tamper_backups WHERE record_db_id IN ({placeholders})", matching_ids
+        )
+
+    return {
+        "deleted_count": len(matching_ids),
+        "deleted_ids": matching_ids,
+        "message": f"Removed {len(matching_ids)} entries for {filename}",
+    }
+
+
+@app.delete("/api/records/{record_db_id}")
+def delete_record_by_id(record_db_id: int) -> dict[str, Any]:
+    """Remove one entry from the ledger and re-seal the remaining chain."""
+    with db_session() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute("SELECT id FROM hash_records WHERE id = ?", (record_db_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Record not found")
+        connection.execute("DELETE FROM hash_records WHERE id = ?", (record_db_id,))
+        _rebuild_ledger_chain(connection)
+        connection.commit()
+
+    with raw_db_session() as raw_connection:
+        raw_connection.execute("DELETE FROM raw_logs WHERE record_db_id = ?", (record_db_id,))
+        raw_connection.execute("DELETE FROM tamper_backups WHERE record_db_id = ?", (record_db_id,))
+
+    return {"deleted_id": record_db_id, "message": f"Deleted record #{record_db_id}"}
+
+
+@app.post("/api/records/clear")
+def clear_all_records() -> dict[str, Any]:
+    """Clear all records from the ledger database."""
+    with db_session() as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        connection.execute("DELETE FROM hash_records")
+        connection.execute("DELETE FROM checkpoints")
+        try:
+            connection.execute("DELETE FROM sqlite_sequence WHERE name IN ('hash_records', 'checkpoints')")
+        except sqlite3.OperationalError:
+            pass
+        connection.commit()
+
+    with raw_db_session() as raw_connection:
+        raw_connection.execute("DELETE FROM raw_logs")
+        raw_connection.execute("DELETE FROM tamper_backups")
+
+    return {"status": "cleared", "message": "All records and checkpoints cleared from database"}
+
+
 @app.post("/api/records/verify", response_model=RecordVerifyResponse)
 def verify_external_record(request: RecordVerifyRequest) -> RecordVerifyResponse:
     """Compare current external content with the latest registered hash."""

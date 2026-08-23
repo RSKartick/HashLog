@@ -47,6 +47,21 @@ export async function recordHistory({ source_system, record_type, record_id }) {
   return data;
 }
 
+export async function deleteRecordsByFile(filename) {
+  const { data } = await api.delete(`/records/file/${encodeURIComponent(filename)}`);
+  return data;
+}
+
+export async function deleteRecord(recordDbId) {
+  const { data } = await api.delete(`/records/${recordDbId}`);
+  return data;
+}
+
+export async function clearAllRecords() {
+  const { data } = await api.post("/records/clear");
+  return data;
+}
+
 // ---------- Verify ----------
 
 export async function verifyLedger() {

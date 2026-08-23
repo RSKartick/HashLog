@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Header from "./components/Header.jsx";
 import Hero from "./components/Hero.jsx";
 import StatsBar from "./components/StatsBar.jsx";
@@ -15,6 +15,7 @@ import {
   listRecords,
   registerRecord,
   importRecords,
+  deleteRecordsByFile,
   verifyLedger,
   healthCheck,
   exportLedger,
@@ -35,6 +36,31 @@ export default function App() {
   const [checkpointsCount, setCheckpointsCount] = useState(0);
   const [recordsLoading, setRecordsLoading] = useState(true);
   const [logSnapshots, setLogSnapshots] = useState({});
+
+  const activeFiles = useMemo(() => {
+    const map = new Map();
+    records.forEach((r) => {
+      const fn = r.metadata?.filename || (r.record_id && (r.record_id.includes(".") || r.metadata?.preview_rows != null) ? r.record_id : null);
+      if (fn) {
+        if (!map.has(fn)) {
+          map.set(fn, {
+            filename: fn,
+            source_system: r.source_system,
+            record_type: r.record_type,
+            recordCount: 1,
+            size: r.metadata?.size_bytes || 0,
+            ids: [r.id],
+            timestamp: r.timestamp,
+          });
+        } else {
+          const item = map.get(fn);
+          item.recordCount += 1;
+          item.ids.push(r.id);
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [records]);
 
   const showToast = (message) => {
     setToast(message);
@@ -212,6 +238,20 @@ export default function App() {
     await runAudit(list);
   };
 
+  const handleDeleteFile = async (filename) => {
+    setLoading((s) => ({ ...s, upload: true }));
+    try {
+      const res = await deleteRecordsByFile(filename);
+      const list = await fetchRecords();
+      await runAudit(list);
+      showToast(res?.message || `Removed ${filename} and cleared all its ledger entries`);
+    } catch (err) {
+      showToast(err?.response?.data?.detail || `Failed to remove ${filename}`);
+    } finally {
+      setLoading((s) => ({ ...s, upload: false }));
+    }
+  };
+
   const handleAuthorizedVersion = async () => {
     const list = await fetchRecords();
     await runAudit(list);
@@ -264,6 +304,8 @@ export default function App() {
         <AddEntry
           onSubmit={handleRegister}
           onBatchSubmit={handleBatchImport}
+          activeFiles={activeFiles}
+          onDeleteFile={handleDeleteFile}
           loading={loading.entry || loading.upload}
         />
 

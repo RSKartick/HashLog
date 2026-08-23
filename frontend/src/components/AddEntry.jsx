@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from "react";
-import { FiPlus, FiUploadCloud, FiDatabase, FiTag, FiHash, FiFileText, FiCheck, FiX } from "react-icons/fi";
+import { FiPlus, FiUploadCloud, FiDatabase, FiTag, FiHash, FiFileText, FiCheck, FiX, FiTrash2 } from "react-icons/fi";
 
-export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
+export default function AddEntry({ onSubmit, onBatchSubmit, activeFiles = [], onDeleteFile, loading }) {
   const [tab, setTab] = useState("single"); // "single" | "batch"
   
   // Single registration state
@@ -126,7 +126,31 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
     setFile(null);
     setBatchRawContent("");
     setBatchParsed(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
+
+  const handleRemoveFile = (e) => {
+    e?.stopPropagation?.();
+    setFile(null);
+    setBatchRawContent("");
+    setBatchParsed(null);
+    setBatchError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleClearSingle = () => {
+    setSourceSystem("");
+    setRecordType("");
+    setRecordId("");
+    setContent("");
+    setMetadataJson("");
+  };
+
+  const hasSingleData = Boolean(sourceSystem || recordType || recordId || content || metadataJson);
 
   return (
     <section id="register" className="w-full max-w-6xl mx-auto px-4 sm:px-8 py-10 border-t border-[#1a1a1a]">
@@ -258,8 +282,19 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
               />
             </div>
 
-            {/* Submit Button */}
-            <div className="flex justify-end pt-2">
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-2">
+              {hasSingleData ? (
+                <button
+                  type="button"
+                  onClick={handleClearSingle}
+                  className="flex items-center gap-1.5 font-mono text-xs text-[#8a8480] hover:text-red-400 px-3 py-2 rounded border border-[#242424] hover:border-red-900/60 bg-[#0e0e0e] hover:bg-red-950/20 transition-colors"
+                >
+                  <FiTrash2 className="w-3.5 h-3.5" />
+                  <span>Clear Inputs</span>
+                </button>
+              ) : <div />}
+
               <button
                 type="submit"
                 disabled={loading || !sourceSystem.trim() || !recordType.trim() || !recordId.trim() || !content.trim()}
@@ -310,28 +345,42 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-3.5 bg-[#050505] border border-[#1f1f1f] rounded-[4px]">
+              {/* Staged File Header with Remove Option */}
+              <div className="flex items-center justify-between p-3.5 bg-[#050505] border border-[#1f1f1f] rounded-[4px] group">
                 <div className="flex items-center gap-3">
-                  <FiFileText className="w-4 h-4 text-[#c9793f]" />
+                  <div className="w-8 h-8 rounded bg-[#111111] border border-[#242424] flex items-center justify-center text-[#c9793f]">
+                    <FiFileText className="w-4 h-4" />
+                  </div>
                   <div>
-                    <div className="font-mono text-xs text-[#f0ece9]">{file.name}</div>
-                    <div className="font-mono text-[10px] text-[#8a8480]">{(file.size / 1024).toFixed(1)} KB</div>
+                    <div className="font-mono text-xs text-[#f0ece9] font-medium">{file.name}</div>
+                    <div className="font-mono text-[10px] text-[#8a8480]">
+                      {(file.size / 1024).toFixed(1)} KB · Selected File
+                    </div>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    setFile(null);
-                    setBatchRawContent("");
-                    setBatchParsed(null);
-                  }}
-                  className="p-1 rounded bg-[#161616] text-[#8a8480] hover:text-[#f0ece9]"
+                  onClick={handleRemoveFile}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 hover:border-red-600 text-red-300 font-mono text-xs transition-all shadow-sm hover:shadow-[0_0_12px_rgba(239,68,68,0.25)]"
+                  title="Remove this file"
                 >
-                  <FiX className="w-4 h-4" />
+                  <FiTrash2 className="w-3.5 h-3.5" />
+                  <span>Remove file</span>
                 </button>
               </div>
 
-              {batchError && <p className="text-xs text-red-400 font-mono">{batchError}</p>}
+              {batchError && (
+                <div className="p-3 rounded bg-red-950/30 border border-red-800/60 text-xs text-red-300 font-mono flex items-center justify-between">
+                  <span>{batchError}</span>
+                  <button
+                    type="button"
+                    onClick={handleRemoveFile}
+                    className="underline text-red-400 hover:text-red-200 ml-2"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
 
               {batchParsed && (
                 <div className="space-y-4">
@@ -344,6 +393,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
                         type="text"
                         value={batchSource}
                         onChange={(e) => setBatchSource(e.target.value)}
+                        placeholder="e.g. legacy_migration"
                         className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[4px] px-3 py-2 font-mono text-xs text-[#f0ece9] focus:outline-none"
                       />
                     </div>
@@ -355,6 +405,7 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
                         type="text"
                         value={batchType}
                         onChange={(e) => setBatchType(e.target.value)}
+                        placeholder="e.g. batch_archive"
                         className="w-full bg-[#080808] border border-[#1f1f1f] focus:border-[#c9793f] rounded-[4px] px-3 py-2 font-mono text-xs text-[#f0ece9] focus:outline-none"
                       />
                     </div>
@@ -378,20 +429,80 @@ export default function AddEntry({ onSubmit, onBatchSubmit, loading }) {
                     </div>
                   </div>
 
-                  <button
-                    onClick={handleBatchConfirm}
-                    disabled={loading || !batchSource.trim() || !batchType.trim()}
-                    className="w-full flex items-center justify-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-black bg-[#f0ece9] hover:bg-white py-3.5 rounded-[4px] transition-colors"
-                  >
-                    {loading ? (
-                      <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <FiCheck className="w-4 h-4" />
-                    )}
-                    <span>Commit File Proof (1)</span>
-                  </button>
+                  <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleRemoveFile}
+                      className="w-full sm:w-1/3 flex items-center justify-center gap-2 font-mono text-xs text-[#8a8480] hover:text-red-400 bg-[#0e0e0e] hover:bg-red-950/20 border border-[#242424] hover:border-red-800/60 py-3.5 rounded-[4px] transition-colors"
+                    >
+                      <FiTrash2 className="w-4 h-4 text-red-400" />
+                      <span>Remove / Choose Another</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBatchConfirm}
+                      disabled={loading || !batchSource.trim() || !batchType.trim()}
+                      className="w-full sm:w-2/3 flex items-center justify-center gap-2 font-mono text-xs font-semibold uppercase tracking-wider text-black bg-[#f0ece9] hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed py-3.5 rounded-[4px] transition-colors shadow-[0_0_20px_rgba(201,121,63,0.2)]"
+                    >
+                      {loading ? (
+                        <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <FiCheck className="w-4 h-4" />
+                      )}
+                      <span>Commit File Proof (1)</span>
+                    </button>
+                  </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Active Registered Files in Current Session */}
+          {activeFiles.length > 0 && (
+            <div className="mt-8 pt-6 border-t border-[#1a1a1a] space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-[#c9793f]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#c9793f] animate-pulse" />
+                  <span>Active Registered Files in Session ({activeFiles.length})</span>
+                </div>
+                <span className="font-mono text-[9px] text-[#8a8480]">
+                  Removing a file deletes its ledger entries and re-seals the cryptographic chain
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {activeFiles.map((item) => (
+                  <div
+                    key={item.filename}
+                    className="p-3.5 bg-[#080808] border border-[#1f1f1f] hover:border-[#2e2e2e] rounded-[6px] flex items-center justify-between gap-3 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="w-8 h-8 rounded bg-[#141414] border border-[#262626] flex items-center justify-center text-[#c9793f] shrink-0">
+                        <FiFileText className="w-4 h-4" />
+                      </div>
+                      <div className="overflow-hidden">
+                        <div className="font-mono text-xs text-[#f0ece9] truncate font-medium">
+                          {item.filename}
+                        </div>
+                        <div className="font-mono text-[10px] text-[#8a8480] truncate">
+                          {item.source_system} / {item.record_type} · {item.recordCount} {item.recordCount === 1 ? "entry" : "entries"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onDeleteFile?.(item.filename)}
+                      disabled={loading}
+                      className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-red-950/40 hover:bg-red-950/80 border border-red-800/60 hover:border-red-600 text-red-300 font-mono text-[11px] transition-all disabled:opacity-40 shadow-sm"
+                      title="Remove this file and delete all its records from the ledger"
+                    >
+                      <FiTrash2 className="w-3 h-3" />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

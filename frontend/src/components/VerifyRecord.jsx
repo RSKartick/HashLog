@@ -277,13 +277,30 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
                 <label className="block font-mono text-[9px] text-[#8a8480] uppercase">
                   Current External Record or File to Test:
                 </label>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="font-mono text-[9px] uppercase text-[#c9793f] hover:text-[#f0ece9]"
-                >
-                  Choose file
-                </button>
+                <div className="flex items-center gap-2">
+                  {content && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContent("");
+                        setRecordId("");
+                        setRecordResult(null);
+                        setRecordError(null);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                      className="font-mono text-[9px] uppercase text-red-400 hover:text-red-300"
+                    >
+                      Clear File / Payload
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="font-mono text-[9px] uppercase text-[#c9793f] hover:text-[#f0ece9]"
+                  >
+                    Choose file
+                  </button>
+                </div>
                 <input
                   ref={fileInputRef}
                   type="file"
