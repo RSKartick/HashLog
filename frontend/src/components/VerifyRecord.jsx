@@ -167,7 +167,7 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
                 className={`p-4 rounded-[4px] border ${
                   ledgerResult.valid
                     ? "bg-emerald-950/30 border-emerald-800/70 text-emerald-300"
-                    : "bg-red-950/30 border-red-800/70 text-red-300"
+                    : "bg-red-950/40 border-red-600/80 text-red-300 shadow-[0_0_20px_rgba(239,68,68,0.25)] animate-pulse"
                 }`}
               >
                 <div className="flex items-center gap-2 font-mono text-xs font-semibold mb-1">
@@ -178,9 +178,15 @@ export default function VerifyRecord({ onRunFullVerify, ledgerResult, ledgerLoad
                   )}
                   <span>{ledgerResult.message}</span>
                 </div>
-                <div className="font-mono text-[10px] opacity-80 pl-6">
+                <div className="font-mono text-[10px] opacity-90 pl-6">
                   {ledgerResult.total_records} proofs audited ·{" "}
-                  {ledgerResult.valid ? "0 anomalies detected" : `compromised at block #${ledgerResult.tampered_at}`}
+                  {ledgerResult.valid ? (
+                    <span className="text-emerald-400 font-medium">0 anomalies detected (Ledger Intact)</span>
+                  ) : (
+                    <span className="text-red-400 font-bold underline">
+                      Compromised at block #{ledgerResult.tampered_at} (Fractured Chain)
+                    </span>
+                  )}
                 </div>
               </div>
             )}

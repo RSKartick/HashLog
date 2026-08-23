@@ -542,10 +542,39 @@ def verify_external_record(request: RecordVerifyRequest) -> RecordVerifyResponse
 def _verify_ledger_rows(rows: list[sqlite3.Row]) -> LedgerVerifyResponse:
     expected_ledger = GENESIS_HASH
     latest_by_identity: dict[tuple[str, str, str], sqlite3.Row] = {}
+
+    # Check for active tamper simulations in tamper_backups and raw_logs
+    tamper_backup_ids = set()
+    raw_logs_map = {}
+    try:
+        with raw_db_session() as raw_conn:
+            tamper_backup_ids = {
+                r["record_db_id"]
+                for r in raw_conn.execute("SELECT record_db_id FROM tamper_backups").fetchall()
+            }
+            raw_logs_map = {
+                r["record_db_id"]: r["raw_content"]
+                for r in raw_conn.execute("SELECT record_db_id, raw_content FROM raw_logs").fetchall()
+            }
+    except sqlite3.Error:
+        pass
+
     for row in rows:
+        row_id = row["id"]
         identity = (row["source_system"], row["record_type"], row["record_id"])
         previous_for_record = latest_by_identity.get(identity)
         expected_version = (previous_for_record["version_number"] + 1) if previous_for_record else 1
+
+        # 1. Check if explicitly in tamper lab active session
+        if row_id in tamper_backup_ids:
+            return LedgerVerifyResponse(
+                valid=False,
+                tampered_at=row_id,
+                total_records=len(rows),
+                message=f"Tampered log detected at record #{row_id} (tamper simulation active)",
+            )
+
+        # 2. Check previous ledger hash link and version continuity
         if (
             row["previous_ledger_hash"] != expected_ledger
             or row["version_number"] != expected_version
@@ -554,30 +583,49 @@ def _verify_ledger_rows(rows: list[sqlite3.Row]) -> LedgerVerifyResponse:
         ):
             return LedgerVerifyResponse(
                 valid=False,
-                tampered_at=row["id"],
+                tampered_at=row_id,
                 total_records=len(rows),
-                message=f"Ledger tampering detected at record #{row['id']}",
+                message=f"Ledger tampering detected at record #{row_id}",
             )
-        if row["raw_content"] is not None and compute_content_hash(_parse_raw_content(row["raw_content"])) != row["content_hash"]:
-            return LedgerVerifyResponse(
-                valid=False,
-                tampered_at=row["id"],
-                total_records=len(rows),
-                message=f"Raw log content tampering detected at record #{row['id']}",
-            )
+
+        # 3. Check hash_records raw_content vs content_hash
+        if row["raw_content"] is not None:
+            parsed_raw = _parse_raw_content(row["raw_content"])
+            if compute_content_hash(parsed_raw) != row["content_hash"]:
+                return LedgerVerifyResponse(
+                    valid=False,
+                    tampered_at=row_id,
+                    total_records=len(rows),
+                    message=f"Raw log content tampering detected at record #{row_id}",
+                )
+
+        # 4. Check raw_logs table vs content_hash
+        if row_id in raw_logs_map and raw_logs_map[row_id] is not None:
+            parsed_raw_log = _parse_raw_content(raw_logs_map[row_id])
+            if compute_content_hash(parsed_raw_log) != row["content_hash"]:
+                return LedgerVerifyResponse(
+                    valid=False,
+                    tampered_at=row_id,
+                    total_records=len(rows),
+                    message=f"Raw log content tampering detected at record #{row_id}",
+                )
+
+        # 5. Check entry_hash reconstruction
         computed = _entry_hash_for_row(row)
         if row["entry_hash"] != computed:
             return LedgerVerifyResponse(
                 valid=False,
-                tampered_at=row["id"],
+                tampered_at=row_id,
                 total_records=len(rows),
-                message=f"Ledger tampering detected at record #{row['id']}",
+                message=f"Ledger entry hash mismatch detected at record #{row_id}",
             )
+
         expected_ledger = computed
         row_dict = dict(row)
         row_dict["entry_hash"] = computed
         # Keep the fields needed for the next version without mutating SQLite.
         latest_by_identity[identity] = _RowProxy(row_dict)  # type: ignore[assignment]
+
     return LedgerVerifyResponse(valid=True, total_records=len(rows), message="Ledger is valid")
 
 

@@ -122,9 +122,8 @@ export default function App() {
     try {
       await registerRecord({ source_system, record_type, record_id, content, metadata });
       rememberSnapshot(source_system, record_type, record_id, typeof content === "string" ? content : JSON.stringify(content, null, 2));
-      await fetchRecords();
-      setVerifyResult(null);
-      setTamperedIds(new Set());
+      const list = await fetchRecords();
+      await runAudit(list);
       showToast(`Proof registered for ${record_id}`);
     } catch (err) {
       showToast(err?.response?.data?.detail || "Failed to register proof");
@@ -138,9 +137,8 @@ export default function App() {
     try {
       await importRecords({ source_system, record_type, records: batchItems });
       batchItems.forEach((item) => rememberSnapshot(source_system, record_type, item.record_id, item.content));
-      await fetchRecords();
-      setVerifyResult(null);
-      setTamperedIds(new Set());
+      const list = await fetchRecords();
+      await runAudit(list);
       showToast(`File proof registered: ${batchItems[0]?.record_id || "uploaded log"}`);
     } catch (err) {
       showToast(err?.response?.data?.detail || "Batch import failed");
