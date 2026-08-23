@@ -40,15 +40,15 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
 
   return (
     <div
-      className={`instrument-card transition-all duration-200 overflow-hidden ${
+      className={`instrument-card transition-all duration-200 ${
         tampered
           ? "!border-red-600/80 bg-red-950/20 shadow-[0_0_20px_rgba(239,68,68,0.2)]"
           : "hover:border-[#383838]"
       }`}
     >
       {/* Top Banner Row */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2.5 border-b border-[#1a1a1a]">
-        <div className="flex flex-wrap items-center gap-2 min-w-0">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1a1a1a]">
+        <div className="flex items-center gap-2">
           <span className="font-mono text-xs font-semibold text-[#f0ece9]">
             #{record.id}
           </span>
@@ -67,8 +67,8 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
           )}
         </div>
 
-        <div className="flex items-center gap-3 text-[10px] text-[#8a8480] font-mono shrink-0">
-          <span className="flex items-center gap-1 whitespace-nowrap">
+        <div className="flex items-center gap-3 text-[10px] text-[#8a8480] font-mono">
+          <span className="flex items-center gap-1">
             <FiClock className="w-3 h-3 text-[#5a5654]" />
             <span>{new Date(record.timestamp).toLocaleTimeString()}</span>
           </span>
@@ -79,19 +79,19 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
       <div className="p-4 space-y-3">
         {/* Identity pills */}
         <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
-          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded-[3px] border border-[#1f1f1f] text-[#f0ece9] max-w-full">
-            <FiHash className="w-3.5 h-3.5 text-[#c9793f] shrink-0" />
-            <span className="font-medium truncate min-w-0">{record.record_id}</span>
+          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded-[3px] border border-[#1f1f1f] text-[#f0ece9]">
+            <FiHash className="w-3.5 h-3.5 text-[#c9793f]" />
+            <span className="font-medium">{record.record_id}</span>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded-[3px] border border-[#1f1f1f] text-[#b8b2ae] max-w-full">
-            <FiDatabase className="w-3.5 h-3.5 text-[#8a8480] shrink-0" />
-            <span className="truncate min-w-0">{record.source_system}</span>
+          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded-[3px] border border-[#1f1f1f] text-[#b8b2ae]">
+            <FiDatabase className="w-3.5 h-3.5 text-[#8a8480]" />
+            <span>{record.source_system}</span>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded-[3px] border border-[#1f1f1f] text-[#b8b2ae] max-w-full">
-            <FiTag className="w-3.5 h-3.5 text-[#8a8480] shrink-0" />
-            <span className="truncate min-w-0">{record.record_type}</span>
+          <div className="flex items-center gap-1.5 bg-[#111111] px-2.5 py-1 rounded-[3px] border border-[#1f1f1f] text-[#b8b2ae]">
+            <FiTag className="w-3.5 h-3.5 text-[#8a8480]" />
+            <span>{record.record_type}</span>
           </div>
         </div>
 
@@ -99,16 +99,17 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
           <div className="border border-[#2e2e2e] bg-[#050505] rounded-[4px] p-3 space-y-3">
             <div>
               <div className="font-mono text-[9px] uppercase text-[#c9793f] mb-1">Log contents</div>
-              <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-[10px] text-[#f0ece9]">{storedContent == null ? "No raw log content is available for this older record. Re-import the file to save and display its contents." : typeof storedContent === "string" ? storedContent : JSON.stringify(storedContent, null, 2)}</pre>
+              <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[10px] text-[#f0ece9]">{storedContent == null ? "No raw log content is available for this older record. Re-import the file to save and display its contents." : typeof storedContent === "string" ? storedContent : JSON.stringify(storedContent, null, 2)}</pre>
             </div>
             {changedLines.length > 0 && (
               <div className="space-y-1 font-mono text-[10px]">
                 <div className="text-[#8a8480] uppercase">Visual changes from original</div>
                 {changedLines.slice(0, 25).map((line) => (
-                  <div key={line.number} className="bg-[#111111] p-1.5 space-y-0.5">
-                    <span className="text-[#c9793f] block">Line {line.number}</span>
-                    <span className="text-red-300 break-all block">- {line.original || "(removed)"}</span>
-                    <span className="text-emerald-300 break-all block">+ {line.current || "(added)"}</span>
+                  <div key={line.number} className="bg-[#111111] p-1.5">
+                    <span className="text-[#c9793f] mr-2">Line {line.number}</span>
+                    <span className="text-red-300">- {line.original || "(removed)"}</span>
+                    <span className="mx-2 text-[#8a8480]">→</span>
+                    <span className="text-emerald-300">+ {line.current || "(added)"}</span>
                   </div>
                 ))}
               </div>
@@ -129,10 +130,11 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
             {showChanges && (
               <div className="border-t border-amber-800/40 p-2 space-y-1 font-mono text-[10px]">
                 {changedLines.slice(0, 25).map((line) => (
-                  <div key={line.number} className="bg-[#111111] p-1.5 space-y-0.5">
-                    <span className="text-[#c9793f] block">Line {line.number}</span>
-                    <span className="text-red-300 break-all block">- {line.original || "(removed)"}</span>
-                    <span className="text-emerald-300 break-all block">+ {line.current || "(added)"}</span>
+                  <div key={line.number} className="bg-[#111111] p-1.5">
+                    <span className="text-[#c9793f] mr-2">Line {line.number}</span>
+                    <span className="text-red-300">- {line.original || "(removed)"}</span>
+                    <span className="mx-2 text-[#8a8480]">→</span>
+                    <span className="text-emerald-300">+ {line.current || "(added)"}</span>
                   </div>
                 ))}
                 {changedLines.length > 25 && <div className="text-[#8a8480]">Showing first 25 changed lines.</div>}
@@ -144,15 +146,15 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
         {/* Cryptographic Hashes Grid */}
         <div className="space-y-1.5 bg-[#050505] p-3 rounded border border-[#161616] font-mono text-xs">
           {/* Entry Hash */}
-          <div className="flex items-start justify-between gap-2">
-            <span className="text-[#c9793f] font-semibold text-[11px] shrink-0 pt-0.5">entry_hash:</span>
-            <div className="flex items-start gap-1.5 min-w-0">
-              <span className="text-[#f0ece9] select-all text-[11px] break-all text-right flex-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[#c9793f] font-semibold text-[11px]">entry_hash:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#f0ece9] select-all text-[11px]">
                 {truncateHash(record.entry_hash, 12)}
               </span>
               <button
                 onClick={() => copyText(record.entry_hash, `entry-${record.id}`)}
-                className="p-1 rounded bg-[#111111] hover:bg-[#1f1f1f] text-[#8a8480] hover:text-[#f0ece9] transition-colors shrink-0"
+                className="p-1 rounded bg-[#111111] hover:bg-[#1f1f1f] text-[#8a8480] hover:text-[#f0ece9] transition-colors"
                 title="Copy Full Hash"
               >
                 {copiedKey === `entry-${record.id}` ? (
@@ -165,15 +167,15 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
           </div>
 
           {/* Content Hash */}
-          <div className="flex items-start justify-between gap-2 text-[#8a8480]">
-            <span className="text-[11px] shrink-0 pt-0.5">content_hash:</span>
-            <div className="flex items-start gap-1.5 min-w-0">
-              <span className="text-[#b8b2ae] select-all text-[11px] break-all text-right flex-1">
+          <div className="flex items-center justify-between text-[#8a8480]">
+            <span className="text-[11px]">content_hash:</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[#b8b2ae] select-all text-[11px]">
                 {truncateHash(record.content_hash, 12)}
               </span>
               <button
                 onClick={() => copyText(record.content_hash, `content-${record.id}`)}
-                className="p-1 rounded bg-[#111111] hover:bg-[#1f1f1f] text-[#8a8480] hover:text-[#f0ece9] transition-colors shrink-0"
+                className="p-1 rounded bg-[#111111] hover:bg-[#1f1f1f] text-[#8a8480] hover:text-[#f0ece9] transition-colors"
                 title="Copy Full Hash"
               >
                 {copiedKey === `content-${record.id}` ? (
@@ -186,16 +188,16 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
           </div>
 
           {/* Previous Ledger Hash */}
-          <div className="flex items-center justify-between gap-2 text-[#5a5654] text-[10px]">
-            <span className="shrink-0">prev_ledger:</span>
-            <span className="truncate min-w-0">{record.previous_ledger_hash ? truncateHash(record.previous_ledger_hash, 10) : "GENESIS"}</span>
+          <div className="flex items-center justify-between text-[#5a5654] text-[10px]">
+            <span>prev_ledger:</span>
+            <span className="truncate max-w-[150px]">{record.previous_ledger_hash ? truncateHash(record.previous_ledger_hash, 10) : "GENESIS"}</span>
           </div>
 
           {/* Previous Version Hash */}
           {record.previous_version_hash && (
-            <div className="flex items-center justify-between gap-2 text-[#5a5654] text-[10px]">
-              <span className="shrink-0">prev_version:</span>
-              <span className="truncate min-w-0">{truncateHash(record.previous_version_hash, 10)}</span>
+            <div className="flex items-center justify-between text-[#5a5654] text-[10px]">
+              <span>prev_version:</span>
+              <span className="truncate max-w-[150px]">{truncateHash(record.previous_version_hash, 10)}</span>
             </div>
           )}
         </div>
@@ -213,7 +215,7 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
             </button>
 
             {expanded && (
-              <pre className="mt-2 p-2.5 bg-[#050505] border border-[#161616] rounded text-[11px] font-mono text-[#b8b2ae] whitespace-pre-wrap break-all">
+              <pre className="mt-2 p-2.5 bg-[#050505] border border-[#161616] rounded text-[11px] font-mono text-[#b8b2ae] overflow-x-auto">
                 {JSON.stringify(record.metadata, null, 2)}
               </pre>
             )}
@@ -222,7 +224,7 @@ export default function EntryCard({ record, tampered, logSnapshot }) {
 
         <div className="border border-[#2e2e2e] bg-[#050505] rounded-[4px] p-3">
           <div className="font-mono text-[10px] uppercase tracking-wider text-[#c9793f] mb-2">Log Content</div>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all text-[11px] text-[#f0ece9]">
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-[11px] text-[#f0ece9]">
             {backendContent === undefined
               ? "Loading saved log content..."
               : storedContent == null
