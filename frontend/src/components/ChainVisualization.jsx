@@ -166,7 +166,6 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
               const isTampered = tamperedIds.has(record.id);
               const isLatest = i === records.length - 1;
               const hasNext = i < records.length - 1;
-              const nextIsTampered = hasNext && tamperedIds.has(records[i + 1].id);
 
               return (
                 <div key={record.id} className="flex items-center">
@@ -197,7 +196,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     {!isLatest && (
                       <div
                         className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#000000] ${
-                          nextIsTampered ? "bg-red-400 shadow-[0_0_8px_#ef4444]" : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
+                          isTampered ? "bg-red-400 shadow-[0_0_8px_#ef4444]" : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
                         }`}
                       />
                     )}
@@ -274,17 +273,17 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                           y1="16"
                           x2="54"
                           y2="16"
-                          stroke={nextIsTampered ? "#ef4444" : "#c9793f"}
+                          stroke={isTampered ? "#ef4444" : "#c9793f"}
                           strokeWidth="2"
-                          className={nextIsTampered ? "opacity-60" : "animate-chain-flow"}
+                          className={isTampered ? "opacity-60" : "animate-chain-flow"}
                         />
                         {/* Directional arrow head touching edge */}
                         <polygon
                           points="54,10 64,16 54,22"
-                          fill={nextIsTampered ? "#ef4444" : "#c9793f"}
+                          fill={isTampered ? "#ef4444" : "#c9793f"}
                         />
                       </svg>
-                      {nextIsTampered && (
+                      {isTampered && (
                         <span className="absolute -top-1 font-mono text-[8px] bg-red-950 text-red-400 border border-red-800 px-1 rounded whitespace-nowrap">
                           FRACTURE
                         </span>

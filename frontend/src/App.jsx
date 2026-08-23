@@ -129,11 +129,9 @@ export default function App() {
       const result = await verifyLedger();
       setVerifyResult(result);
       if (!result.valid && result.tampered_at != null) {
-        // tampered_at is the SQLite block ID. Compare against actual IDs from
-        // the list that was passed in (never a stale closure).
-        setTamperedIds(
-          new Set(list.filter((record) => record.id >= result.tampered_at).map((record) => record.id))
-        );
+        // Flag ONLY the block whose proof actually failed. Downstream blocks
+        // remain neutral — the fracture link itself shows where trust breaks.
+        setTamperedIds(new Set([result.tampered_at]));
       } else {
         setTamperedIds(new Set());
       }
