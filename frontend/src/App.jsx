@@ -128,10 +128,21 @@ export default function App() {
     try {
       const result = await verifyLedger();
       setVerifyResult(result);
-      if (!result.valid && result.tampered_at != null) {
-        // Flag ONLY the block whose proof actually failed. Downstream blocks
-        // remain neutral — the fracture link itself shows where trust breaks.
-        setTamperedIds(new Set([result.tampered_at]));
+      if (!result.valid) {
+        // Flag the tampered block and all downstream blocks that depend on it
+        const tId = result.tampered_at != null ? result.tampered_at : (list[0]?.id ?? 1);
+        const affected = new Set();
+        list.forEach((r) => {
+          if (Number(r.id) >= Number(tId)) {
+            affected.add(r.id);
+            affected.add(Number(r.id));
+            affected.add(String(r.id));
+          }
+        });
+        if (affected.size === 0 && list.length > 0) {
+          affected.add(list[0].id);
+        }
+        setTamperedIds(affected);
       } else {
         setTamperedIds(new Set());
       }
@@ -182,7 +193,21 @@ export default function App() {
     }
   };
 
-  const handleTamperApplied = async () => {
+  const handleTamperApplied = async (tamperedBlockId) => {
+    if (tamperedBlockId != null) {
+      const affected = new Set();
+      records.forEach((r) => {
+        if (Number(r.id) >= Number(tamperedBlockId)) {
+          affected.add(r.id);
+          affected.add(Number(r.id));
+          affected.add(String(r.id));
+        }
+      });
+      if (affected.size === 0) {
+        affected.add(tamperedBlockId);
+      }
+      setTamperedIds(affected);
+    }
     const list = await fetchRecords();
     await runAudit(list);
   };
@@ -197,6 +222,7 @@ export default function App() {
   };
 
   const latestHash = records.length > 0 ? records[records.length - 1].entry_hash : null;
+  const isLedgerTampered = Boolean(verifyResult && !verifyResult.valid) || tamperedIds.size > 0;
 
   return (
     <div className="min-h-screen bg-[#000000] text-[#f0ece9]">
@@ -213,6 +239,7 @@ export default function App() {
         recordCount={records.length}
         latestHash={latestHash}
         onVerifyClick={handleVerifyLedger}
+        isTampered={isLedgerTampered}
       />
 
       {toast && (

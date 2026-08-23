@@ -129,13 +129,29 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
 
       {viewMode === "global" ? (
         /* Global Linear Spine Graph with Blockchain Connecting Lines */
-        <div className="bg-[#0a0a0a] border border-[#242424] rounded-[8px] p-6 overflow-x-auto relative">
+        <div className={`bg-[#0a0a0a] border ${tamperedIds && tamperedIds.size > 0 ? "border-red-600/80 bg-red-950/10 shadow-[0_0_30px_rgba(239,68,68,0.2)]" : "border-[#242424]"} rounded-[8px] p-6 overflow-x-auto relative transition-all duration-300`}>
+          {tamperedIds && tamperedIds.size > 0 && (
+            <div className="mb-5 flex items-center justify-between p-3 rounded-[6px] bg-red-950/50 border border-red-600/80 text-red-300 font-mono text-xs shadow-[0_0_20px_rgba(239,68,68,0.25)]">
+              <div className="flex items-center gap-2 font-semibold">
+                <FiAlertTriangle className="w-4 h-4 text-red-400 animate-pulse" />
+                <span>CRYPTOGRAPHIC CHAIN FRACTURE DETECTED — INTEGRITY COMPROMISED</span>
+              </div>
+              <span className="text-[10px] text-red-200 bg-red-900/80 px-2 py-0.5 rounded border border-red-500 font-bold">
+                TAMPERED STATE
+              </span>
+            </div>
+          )}
+
           <div className="flex items-center min-w-max pb-4 pt-2">
             {/* Genesis Anchor Block */}
             <div className="flex items-center">
               <div className="w-36 bg-[#111111] border border-[#2e2e2e] rounded-[6px] p-4 text-center relative shadow-[0_0_15px_rgba(201,121,63,0.1)]">
                 {/* Outgoing socket pin */}
-                <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-[#c9793f] border-2 border-[#000000] shadow-[0_0_8px_#c9793f]" />
+                <div className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#000000] ${
+                  records[0] && (tamperedIds.has(records[0].id) || tamperedIds.has(Number(records[0].id)) || tamperedIds.has(String(records[0].id)))
+                    ? "bg-red-500 shadow-[0_0_10px_#ef4444]"
+                    : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
+                }`} />
                 
                 <span className="font-mono text-[10px] text-[#c9793f] uppercase tracking-widest block mb-1 font-bold">
                   GENESIS BLOCK
@@ -152,18 +168,47 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     y1="12"
                     x2="48"
                     y2="12"
-                    stroke="#c9793f"
+                    stroke={
+                      records[0] &&
+                      (tamperedIds.has(records[0].id) ||
+                        tamperedIds.has(Number(records[0].id)) ||
+                        tamperedIds.has(String(records[0].id)))
+                        ? "#ef4444"
+                        : "#c9793f"
+                    }
                     strokeWidth="2"
-                    className="animate-chain-flow"
+                    className={
+                      records[0] &&
+                      (tamperedIds.has(records[0].id) ||
+                        tamperedIds.has(Number(records[0].id)) ||
+                        tamperedIds.has(String(records[0].id)))
+                        ? "opacity-100"
+                        : "animate-chain-flow"
+                    }
                   />
-                  <polygon points="46,7 56,12 46,17" fill="#c9793f" />
+                  <polygon
+                    points="46,7 56,12 46,17"
+                    fill={
+                      records[0] &&
+                      (tamperedIds.has(records[0].id) ||
+                        tamperedIds.has(Number(records[0].id)) ||
+                        tamperedIds.has(String(records[0].id)))
+                        ? "#ef4444"
+                        : "#c9793f"
+                    }
+                  />
                 </svg>
               </div>
             </div>
 
             {/* Block Sequence */}
             {records.map((record, i) => {
-              const isTampered = tamperedIds.has(record.id);
+              const isTampered = Boolean(
+                tamperedIds &&
+                  (tamperedIds.has(record.id) ||
+                    tamperedIds.has(Number(record.id)) ||
+                    tamperedIds.has(String(record.id)))
+              );
               const isLatest = i === records.length - 1;
               const hasNext = i < records.length - 1;
 
@@ -179,7 +224,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     tabIndex={0}
                     className={`w-64 bg-[#0d0d0d] border rounded-[8px] p-4 cursor-pointer transition-all duration-200 group relative hover:scale-[1.02] ${
                       isTampered
-                        ? "border-red-600/80 bg-red-950/20 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
+                        ? "!border-red-600 !bg-red-950/30 !shadow-[0_0_25px_rgba(239,68,68,0.35)]"
                         : isLatest
                         ? "border-[#c9793f]/80 shadow-[0_0_20px_rgba(201,121,63,0.2)] hover:border-[#c9793f]"
                         : "border-[#242424] hover:border-[#383838]"
@@ -188,7 +233,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     {/* Incoming socket pin */}
                     <div
                       className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#000000] ${
-                        isTampered ? "bg-red-400 shadow-[0_0_8px_#ef4444]" : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
+                        isTampered ? "!bg-red-500 !shadow-[0_0_10px_#ef4444]" : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
                       }`}
                     />
 
@@ -196,7 +241,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     {!isLatest && (
                       <div
                         className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-[#000000] ${
-                          isTampered ? "bg-red-400 shadow-[0_0_8px_#ef4444]" : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
+                          isTampered ? "!bg-red-500 !shadow-[0_0_10px_#ef4444]" : "bg-[#c9793f] shadow-[0_0_8px_#c9793f]"
                         }`}
                       />
                     )}
@@ -205,14 +250,16 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     <div className="flex items-center justify-between mb-2.5">
                       <span className="font-mono text-xs font-semibold text-[#f0ece9] flex items-center gap-1.5">
                         BLOCK #{record.id}
-                        <span className="text-[9px] font-normal text-[#8a8480] bg-[#161616] px-1.5 py-0.5 rounded border border-[#242424]">
+                        <span className={`text-[9px] font-normal px-1.5 py-0.5 rounded border ${
+                          isTampered ? "bg-red-950 text-red-300 border-red-800" : "bg-[#161616] text-[#8a8480] border-[#242424]"
+                        }`}>
                           v{record.version_number}
                         </span>
                       </span>
                       <span
                         className={`font-mono text-[9px] px-2 py-0.5 rounded ${
                           isTampered
-                            ? "bg-red-950 text-red-400 border border-red-800/60 font-semibold"
+                            ? "!bg-red-950 !text-red-300 !border !border-red-600 font-bold shadow-[0_0_8px_rgba(239,68,68,0.4)]"
                             : isLatest
                             ? "bg-[#1a1410] text-[#c9793f] border border-[#8a5730]/60 font-semibold"
                             : "bg-[#161616] text-[#b8b2ae] border border-[#2e2e2e]"
@@ -233,16 +280,18 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                     </div>
 
                     {/* Hashes Bus Box */}
-                    <div className="space-y-1 bg-[#050505] p-2 rounded border border-[#161616] font-mono text-[10px]">
+                    <div className={`space-y-1 p-2 rounded border font-mono text-[10px] ${
+                      isTampered ? "bg-red-950/40 border-red-900/60" : "bg-[#050505] border-[#161616]"
+                    }`}>
                       <div className="flex items-center justify-between">
                         <span className="text-[#5a5654]">prev_hash:</span>
-                        <span className="text-[#8a8480] truncate max-w-[110px]">
+                        <span className={`truncate max-w-[110px] ${isTampered ? "text-red-300" : "text-[#8a8480]"}`}>
                           {record.previous_ledger_hash ? `${record.previous_ledger_hash.slice(0, 8)}...` : "GENESIS"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[#c9793f]">entry_hash:</span>
-                        <span className="text-[#f0ece9] font-medium truncate max-w-[110px]">
+                        <span className={isTampered ? "text-red-400 font-bold" : "text-[#c9793f]"}>entry_hash:</span>
+                        <span className={`truncate max-w-[110px] font-medium ${isTampered ? "text-red-200" : "text-[#f0ece9]"}`}>
                           {record.entry_hash ? `${record.entry_hash.slice(0, 8)}...` : "..."}
                         </span>
                       </div>
@@ -255,7 +304,9 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                           event.stopPropagation();
                           setInspectBlock(record);
                         }}
-                        className="flex items-center gap-1 text-[#c9793f] hover:text-[#f0ece9] uppercase"
+                        className={`flex items-center gap-1 uppercase ${
+                          isTampered ? "text-red-400 hover:text-red-200 font-bold" : "text-[#c9793f] hover:text-[#f0ece9]"
+                        }`}
                       >
                         <span>Inspect log + forensic certificate</span>
                         <FiMaximize2 className="w-3 h-3" />
@@ -274,8 +325,8 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                           x2="54"
                           y2="16"
                           stroke={isTampered ? "#ef4444" : "#c9793f"}
-                          strokeWidth="2"
-                          className={isTampered ? "opacity-60" : "animate-chain-flow"}
+                          strokeWidth={isTampered ? "2.5" : "2"}
+                          className={isTampered ? "opacity-100" : "animate-chain-flow"}
                         />
                         {/* Directional arrow head touching edge */}
                         <polygon
@@ -284,7 +335,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                         />
                       </svg>
                       {isTampered && (
-                        <span className="absolute -top-1 font-mono text-[8px] bg-red-950 text-red-400 border border-red-800 px-1 rounded whitespace-nowrap">
+                        <span className="absolute -top-1 font-mono text-[8px] bg-red-950 text-red-300 border border-red-600 px-1.5 py-0.5 rounded whitespace-nowrap shadow-[0_0_8px_rgba(239,68,68,0.5)] font-bold">
                           FRACTURE
                         </span>
                       )}
@@ -297,7 +348,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
         </div>
       ) : (
         /* Per-Record Version Lineage DAG */
-        <div className="instrument-card p-6 space-y-6">
+        <div className={`instrument-card p-6 space-y-6 ${tamperedIds && tamperedIds.size > 0 ? "border-red-600/60 bg-red-950/10" : ""}`}>
           {/* Identity Switcher Bar */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-[#1a1a1a]">
             <span className="font-mono text-[10px] text-[#8a8480] uppercase mr-2 shrink-0">
@@ -306,18 +357,32 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
             {Object.keys(recordIdentities).map((key) => {
               const versions = recordIdentities[key];
               const isSelected = key === activeIdentityKey;
+              const hasTamperedVersion = versions.some(
+                (v) =>
+                  tamperedIds &&
+                  (tamperedIds.has(v.id) ||
+                    tamperedIds.has(Number(v.id)) ||
+                    tamperedIds.has(String(v.id)))
+              );
+
               return (
                 <button
                   key={key}
                   onClick={() => setSelectedRecordId(key)}
                   className={`font-mono text-xs px-3 py-1.5 rounded-[4px] border whitespace-nowrap transition-colors flex items-center gap-2 ${
-                    isSelected
+                    hasTamperedVersion
+                      ? "border-red-600 bg-red-950/40 text-red-300 font-bold shadow-[0_0_10px_rgba(239,68,68,0.2)]"
+                      : isSelected
                       ? "border-[#c9793f] bg-[#1a1410] text-[#f0ece9] font-medium"
                       : "border-[#1f1f1f] bg-[#0a0a0a] text-[#8a8480] hover:text-[#f0ece9]"
                   }`}
                 >
                   <span>{key}</span>
-                  <span className="text-[10px] bg-[#111111] px-1.5 py-0.2 rounded border border-[#242424] text-[#c9793f]">
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded border ${
+                    hasTamperedVersion
+                      ? "bg-red-900 border-red-700 text-red-200"
+                      : "bg-[#111111] border-[#242424] text-[#c9793f]"
+                  }`}>
                     {versions.length} ver
                   </span>
                 </button>
@@ -328,7 +393,12 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
           {/* Lineage Branching Timeline */}
           <div className="relative pl-6 space-y-6 before:absolute before:left-3 before:top-3 before:bottom-3 before:w-[1px] before:bg-[#2e2e2e]">
             {activeLineageRecords.map((versionRecord, idx) => {
-              const isTampered = tamperedIds.has(versionRecord.id);
+              const isTampered = Boolean(
+                tamperedIds &&
+                  (tamperedIds.has(versionRecord.id) ||
+                    tamperedIds.has(Number(versionRecord.id)) ||
+                    tamperedIds.has(String(versionRecord.id)))
+              );
               const isLatestVersion = idx === activeLineageRecords.length - 1;
 
               return (
@@ -337,7 +407,7 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                   <div
                     className={`absolute -left-6 top-3 w-2.5 h-2.5 rounded-full border-2 bg-[#000000] -translate-x-1/2 ${
                       isTampered
-                        ? "border-red-400 bg-red-400 animate-ping"
+                        ? "border-red-500 bg-red-500 animate-ping shadow-[0_0_8px_#ef4444]"
                         : isLatestVersion
                         ? "border-[#c9793f] bg-[#c9793f]"
                         : "border-[#8a8480]"
@@ -347,19 +417,27 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                   {/* Version Detail Card */}
                   <div
                     onClick={() => setInspectBlock(versionRecord)}
-                    className="bg-[#0d0d0d] border border-[#1f1f1f] hover:border-[#383838] rounded-[6px] p-4 cursor-pointer transition-all"
+                    className={`border rounded-[6px] p-4 cursor-pointer transition-all ${
+                      isTampered
+                        ? "!border-red-600 !bg-red-950/30 !shadow-[0_0_20px_rgba(239,68,68,0.35)]"
+                        : "bg-[#0d0d0d] border-[#1f1f1f] hover:border-[#383838]"
+                    }`}
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                       <div className="flex items-center gap-2 font-mono text-xs">
-                        <span className="text-[#f0ece9] font-bold">
+                        <span className={isTampered ? "text-red-300 font-bold" : "text-[#f0ece9] font-bold"}>
                           Version {versionRecord.version_number}.0
                         </span>
                         <span className="text-[#8a8480]">· Block #{versionRecord.id}</span>
-                        {isLatestVersion && (
+                        {isTampered ? (
+                          <span className="text-[9px] bg-red-950 border border-red-600 text-red-300 font-bold px-2 py-0.2 rounded">
+                            TAMPERED_NODE
+                          </span>
+                        ) : isLatestVersion ? (
                           <span className="text-[9px] bg-[#1a1410] border border-[#8a5730]/50 text-[#c9793f] px-2 py-0.2 rounded">
                             CURRENT_HEAD
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-1.5 font-mono text-[10px] text-[#5a5654]">
                         <FiClock className="w-3 h-3" />
@@ -367,16 +445,18 @@ export default function ChainVisualization({ records, tamperedIds, logSnapshots 
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs bg-[#050505] p-3 rounded border border-[#161616]">
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 font-mono text-xs p-3 rounded border ${
+                      isTampered ? "bg-red-950/40 border-red-900/60" : "bg-[#050505] border-[#161616]"
+                    }`}>
                       <div>
                         <span className="text-[#5a5654] block text-[9px] uppercase">Payload Content Hash</span>
-                        <span className="text-[#b8b2ae] truncate block select-all">
+                        <span className={`truncate block select-all ${isTampered ? "text-red-300 font-bold" : "text-[#b8b2ae]"}`}>
                           {versionRecord.content_hash}
                         </span>
                       </div>
                       <div>
-                        <span className="text-[#c9793f] block text-[9px] uppercase">Version Sealed Hash</span>
-                        <span className="text-[#f0ece9] truncate block select-all font-medium">
+                        <span className={isTampered ? "text-red-400 block text-[9px] uppercase font-bold" : "text-[#c9793f] block text-[9px] uppercase"}>Version Sealed Hash</span>
+                        <span className={`truncate block select-all font-medium ${isTampered ? "text-red-200" : "text-[#f0ece9]"}`}>
                           {versionRecord.entry_hash}
                         </span>
                       </div>

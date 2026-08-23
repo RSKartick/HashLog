@@ -45,7 +45,7 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
         addTimeline(results.some((item) => !item.valid) ? "Checkpoint verification rejected" : "Checkpoint still valid at its boundary", results.some((item) => !item.valid) ? "danger" : "success");
       }
       onMessage?.(result.message);
-      await onTamperApplied?.();
+      await onTamperApplied?.(selectedRecord.id);
     } catch (error) {
       onMessage?.(error?.response?.data?.detail || "Tamper simulation is disabled");
     } finally {
@@ -62,7 +62,7 @@ export default function TamperLab({ records, onTamperApplied, onMessage }) {
       setAttackReport(null);
       addTimeline("Original proof restored", "success");
       onMessage?.(result.message);
-      await onTamperApplied?.();
+      await onTamperApplied?.(null);
     } catch (error) {
       onMessage?.(error?.response?.data?.detail || "Could not revert tamper");
     } finally {

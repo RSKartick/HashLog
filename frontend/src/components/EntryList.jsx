@@ -114,7 +114,12 @@ export default function EntryList({ records, tamperedIds, loading = false, logSn
             <EntryCard
               key={record.id}
               record={record}
-              tampered={tamperedIds.has(record.id)}
+              tampered={Boolean(
+                tamperedIds &&
+                  (tamperedIds.has(record.id) ||
+                    tamperedIds.has(Number(record.id)) ||
+                    tamperedIds.has(String(record.id)))
+              )}
               logSnapshot={logSnapshots[`${record.source_system}/${record.record_type}/${record.record_id}`]}
             />
           ))}
